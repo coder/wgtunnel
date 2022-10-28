@@ -35,7 +35,7 @@ func (c *Client) ClientRegister(ctx context.Context, req ClientRegisterRequest) 
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return ClientRegisterResponse{}, err
+		return ClientRegisterResponse{}, readBodyAsError(res)
 	}
 
 	var resp ClientRegisterResponse

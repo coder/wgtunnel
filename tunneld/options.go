@@ -8,9 +8,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/coder/wgtunnel/tunnelsdk"
 	"golang.org/x/xerrors"
 	"golang.zx2c4.com/wireguard/device"
+
+	"cdr.dev/slog"
+	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
 const (
@@ -25,6 +27,8 @@ var (
 var hostnameEncoder = base32.HexEncoding.WithPadding(base32.NoPadding)
 
 type Options struct {
+	Log slog.Logger
+
 	// BaseURL is the base URL to use for the tunnel, including scheme. All
 	// tunnels will be subdomains of this hostname.
 	// e.g. "https://tunnel.example.com" will place tunnels at
@@ -68,7 +72,7 @@ func (options *Options) Validate() error {
 	}
 	_, _, err := net.SplitHostPort(options.WireguardEndpoint)
 	if err != nil {
-		return xerrors.Errorf("WireguardEndpoint %q is not a valid host:port combination: %w", err)
+		return xerrors.Errorf("WireguardEndpoint %q is not a valid host:port combination: %w", options.WireguardEndpoint, err)
 	}
 	if options.WireguardPort == 0 {
 		return xerrors.New("WireguardPort is required")

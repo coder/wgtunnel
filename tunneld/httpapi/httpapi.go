@@ -25,7 +25,7 @@ func Read(ctx context.Context, rw http.ResponseWriter, r *http.Request, value in
 }
 
 // Write outputs the given value as JSON to the response.
-func Write(ctx context.Context, rw http.ResponseWriter, status int, response interface{}) {
+func Write(_ context.Context, rw http.ResponseWriter, status int, response interface{}) {
 	// TODO: tracing
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)

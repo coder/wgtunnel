@@ -9,59 +9,89 @@ import (
 	"os"
 	"time"
 
-	"cdr.dev/slog"
-	"cdr.dev/slog/sloggers/sloghuman"
-	"github.com/spf13/pflag"
+	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
-	"github.com/coder/wgtunnel/cmdflags"
+	"cdr.dev/slog"
+	"cdr.dev/slog/sloggers/sloghuman"
+	"github.com/coder/wgtunnel/buildinfo"
 	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
 func main() {
-	var (
-		showHelp         bool
-		verbose          bool
-		targetAddress    string
-		apiURL           string
-		wireguardKey     string
-		wireguardKeyFile string
-	)
-	cmdflags.BoolFlag(&showHelp, "help", "TUNNEL_HELP", false, "Show this help text.")
-	cmdflags.BoolFlag(&verbose, "verbose", "TUNNEL_VERBOSE", false, "Enable verbose logging.")
-	cmdflags.StringFlag(&targetAddress, "target-address", "TUNNEL_TARGET_ADDRESS", "", "The address of the target server to tunnel to.")
-	cmdflags.StringFlag(&apiURL, "api-url", "TUNNEL_API_URL", "", "The base URL of the tunnel API.")
-	cmdflags.StringFlag(&wireguardKey, "wireguard-key", "TUNNEL_WIREGUARD_KEY", "", "The private key for the wireguard client. It should be base64 encoded. You must specify this or wireguard-key-file.")
-	cmdflags.StringFlag(&wireguardKeyFile, "wireguard-key-file", "TUNNEL_WIREGUARD_KEY_FILE", "", "The file containing the private key for the wireguard client. It should contain a base64 encoded key. The file will be created and populated with a fresh key if it does not exist. You must specify this or wireguard-key.")
+	cli.VersionFlag = &cli.BoolFlag{
+		Name:    "version",
+		Aliases: []string{"V"},
+		Usage:   "Print the version.",
+	}
 
-	pflag.Parse()
-	if showHelp {
-		pflag.Usage()
-		os.Exit(1)
+	app := &cli.App{
+		Name:      "tunnel",
+		Usage:     "run a wgtunnel client",
+		ArgsUsage: "<target-address (e.g. 127.0.0.1:8080)>",
+		Version:   buildinfo.Version(),
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "verbose",
+				Aliases: []string{"v"},
+				Usage:   "Enable verbose logging.",
+				EnvVars: []string{"TUNNEL_VERBOSE"},
+			},
+			&cli.StringFlag{
+				Name:    "api-url",
+				Usage:   "The base URL of the tunnel API.",
+				EnvVars: []string{"TUNNEL_API_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-key",
+				Aliases: []string{"wg-key"},
+				Usage:   "The private key for the wireguard client. It should be base64 encoded. You must specify this or wireguard-key-file.",
+				EnvVars: []string{"TUNNEL_WIREGUARD_KEY"},
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-key-file",
+				Aliases: []string{"wg-key-file"},
+				Usage:   "The file containing the private key for the wireguard client. It should contain a base64 encoded key. The file will be created and populated with a fresh key if it does not exist. You must specify this or wireguard-key.",
+				EnvVars: []string{"TUNNEL_WIREGUARD_KEY_FILE"},
+			},
+		},
+		Action: runApp,
 	}
-	if targetAddress == "" {
-		log.Println("target-address or TUNNEL_TARGET_ADDRESS is required.")
-		showHelp = true
+
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
 	}
+}
+
+func runApp(ctx *cli.Context) error {
+	var (
+		verbose          = ctx.Bool("verbose")
+		apiURL           = ctx.String("api-url")
+		wireguardKey     = ctx.String("wireguard-key")
+		wireguardKeyFile = ctx.String("wireguard-key-file")
+	)
 	if apiURL == "" {
-		log.Println("api-url or TUNNEL_API_URL is required.")
-		showHelp = true
+		return xerrors.New("api-url is required. See --help for more information.")
 	}
-	if wireguardKey == "" || wireguardKeyFile == "" {
-		log.Println("wireguard-key, TUNNEL_WIREGUARD_KEY, wireguard-key-file, or TUNNEL_WIREGUARD_KEY_FILE is required.")
-		showHelp = true
+	if wireguardKey == "" && wireguardKeyFile == "" {
+		return xerrors.New("wireguard-key or wireguard-key-file is required. See --help for more information.")
 	}
 	if wireguardKey != "" && wireguardKeyFile != "" {
-		log.Println("Either wireguard-key, TUNNEL_WIREGUARD_KEY, wireguard-key-file, or TUNNEL_WIREGUARD_KEY_FILE can be supplied, not multiple.")
-		showHelp = true
-	}
-	if showHelp {
-		pflag.Usage()
-		os.Exit(1)
+		return xerrors.New("Only one of wireguard-key or wireguard-key-file can be specified. See --help for more information.")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	if ctx.Args().Len() != 1 {
+		return xerrors.New("exactly one argument (target-address) is required. See --help for more information.")
+	}
+	targetAddress := ctx.Args().Get(0)
+	if targetAddress == "" {
+		return xerrors.New("target-address is empty")
+	}
+	_, _, err := net.SplitHostPort(targetAddress)
+	if err != nil {
+		return xerrors.Errorf("target-address %q is not a valid host:port: %w", targetAddress, err)
+	}
 
 	logger := slog.Make(sloghuman.Sink(os.Stderr)).Leveled(slog.LevelInfo)
 	if verbose {
@@ -70,7 +100,7 @@ func main() {
 
 	apiURLParsed, err := url.Parse(apiURL)
 	if err != nil {
-		log.Fatalf("Invalid api-url or TUNNEL_API_URL %q: %+v", apiURL, err)
+		return xerrors.Errorf("failed to parse api-url %q: %w", apiURL, err)
 	}
 
 	if wireguardKeyFile != "" {
@@ -78,37 +108,37 @@ func main() {
 		if xerrors.Is(err, os.ErrNotExist) {
 			key, err := tunnelsdk.GeneratePrivateKey()
 			if err != nil {
-				log.Fatalf("Failed to generate wireguard key: %+v", err)
+				return xerrors.Errorf("failed to generate wireguard key: %w", err)
 			}
 
 			fileBytes = []byte(key.String())
 			err = os.WriteFile(wireguardKeyFile, fileBytes, 0600)
 			if err != nil {
-				log.Fatalf("Failed to write wireguard key to file %q: %+v", wireguardKeyFile, err)
+				return xerrors.Errorf("failed to write wireguard key to file %q: %w", wireguardKeyFile, err)
 			}
 		} else if err != nil {
-			log.Fatalf("Failed to read wireguard-key-file or TUNNEL_WIREGUARD_KEY_FILE %q: %+v", wireguardKeyFile, err)
+			return xerrors.Errorf("failed to read wireguard-key-file %q: %w", wireguardKeyFile, err)
 		}
 		wireguardKey = string(fileBytes)
 	}
 
 	wireguardKeyParsed, err := tunnelsdk.ParsePrivateKey(wireguardKey)
 	if err != nil {
-		log.Fatalf("Invalid wireguard-key, TUNNEL_WIREGUARD_KEY, wireguard-key-file, or TUNNEL_WIREGUARD_KEY_FILE %q: %+v", wireguardKey, err)
+		return xerrors.Errorf("could not parse wireguard-key or wireguard-key-file: %w", err)
 	}
 
 	client := tunnelsdk.New(apiURLParsed)
-	tunnel, err := client.LaunchTunnel(ctx, tunnelsdk.TunnelConfig{
+	tunnel, err := client.LaunchTunnel(ctx.Context, tunnelsdk.TunnelConfig{
 		Log:        logger,
 		PrivateKey: wireguardKeyParsed,
 	})
 	if err != nil {
-		log.Fatalf("Failed to launch tunnel: %+v", err)
+		return xerrors.Errorf("launch tunnel: %w", err)
 	}
 	defer func() {
 		err := tunnel.Close()
 		if err != nil {
-			log.Fatalf("Failed to close tunnel: %+v", err)
+			logger.Error(ctx.Context, "close tunnel", slog.Error(err))
 		}
 	}()
 
@@ -117,33 +147,40 @@ func main() {
 		for {
 			conn, err := tunnel.Listener.Accept()
 			if err != nil {
-				log.Fatalf("Failed to accept connection: %+v", err)
+				logger.Error(ctx.Context, "close tunnel", slog.Error(err))
+				tunnel.Close()
+				return
 			}
 
 			go func() {
 				defer conn.Close()
 
-				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				defer cancel()
-				targetConn, err := (&net.Dialer{}).DialContext(ctx, "tcp", targetAddress)
+				dialCtx, dialCancel := context.WithTimeout(ctx.Context, 10*time.Second)
+				defer dialCancel()
+
+				targetConn, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", targetAddress)
 				if err != nil {
-					log.Printf("Failed to dial target %q: %+v", targetAddress, err)
+					logger.Warn(ctx.Context, "could not dial target", slog.F("target_address", targetAddress), slog.Error(err))
 					return
 				}
 				defer targetConn.Close()
 
 				go func() {
 					_, err := io.Copy(targetConn, conn)
-					if err != nil {
-						log.Printf("Failed to copy from tunnel to target: %+v", err)
+					if err != nil && !xerrors.Is(err, io.EOF) {
+						logger.Warn(ctx.Context, "could not copy from tunnel to target", slog.Error(err))
 					}
 				}()
 
 				_, err = io.Copy(conn, targetConn)
+				if err != nil && !xerrors.Is(err, io.EOF) {
+					logger.Warn(ctx.Context, "could not copy from target to tunnel", slog.Error(err))
+				}
 			}()
 		}
 	}()
 
 	// TODO: manual signal handling
 	<-tunnel.Wait()
+	return nil
 }

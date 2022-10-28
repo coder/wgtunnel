@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/coder/wgtunnel/tunnelsdk"
 	"github.com/stretchr/testify/require"
+
+	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
 func Test_postClients(t *testing.T) {

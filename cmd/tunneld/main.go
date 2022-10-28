@@ -1,88 +1,153 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
 
-	"github.com/spf13/pflag"
+	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 
-	"github.com/coder/wgtunnel/cmdflags"
+	"cdr.dev/slog"
+	"cdr.dev/slog/sloggers/sloghuman"
+	"github.com/coder/wgtunnel/buildinfo"
 	"github.com/coder/wgtunnel/tunneld"
 	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
 func main() {
-	var (
-		showHelp               bool
-		listenAddress          string
-		baseURL                string
-		wireguardEndpoint      string
-		wireguardPort          uint16
-		wireguardKey           string
-		wireguardMTU           int
-		wireguardServerIP      string
-		wireguardNetworkPrefix string
-	)
-	cmdflags.BoolFlag(&showHelp, "help", "TUNNELD_HELP", false, "Show this help text.")
-	cmdflags.StringFlag(&listenAddress, "listen-address", "TUNNELD_LISTEN_ADDRESS", "127.0.0.1:8080", "HTTP listen address for the API and tunnel traffic.")
-	cmdflags.StringFlag(&baseURL, "base-url", "TUNNELD_BASE_URL", "", "The base URL to use for the tunnel, including scheme. All tunnels will be subdomains of this hostname.")
-	cmdflags.StringFlag(&wireguardEndpoint, "wireguard-endpoint", "TUNNELD_WIREGUARD_ENDPOINT", "", "The UDP address advertised to clients that they will connect to for wireguard connections. It should be in the form host:port.")
-	cmdflags.Uint16Flag(&wireguardPort, "wireguard-port", "TUNNELD_WIREGUARD_PORT", 0, "The UDP port that the wireguard server will listen on. It should be the same as the port in wireguard-endpoint.")
-	cmdflags.StringFlag(&wireguardKey, "wireguard-key", "TUNNELD_WIREGUARD_KEY", "", "The private key for the wireguard server. It should be base64 encoded.")
-	cmdflags.IntFlag(&wireguardMTU, "wireguard-mtu", "TUNNELD_WIREGUARD_MTU", 1280, "The MTU to use for the wireguard interface.")
-	cmdflags.StringFlag(&wireguardServerIP, "wireguard-server-ip", "TUNNELD_WIREGUARD_SERVER_IP", tunneld.DefaultWireguardServerIP.String(), "The virtual IP address of this server in the wireguard network. Must be an IPv6 address contained within wireguard-network-prefix.")
-	cmdflags.StringFlag(&wireguardNetworkPrefix, "wireguard-network-prefix", "TUNNELD_WIREGUARD_NETWORK_PREFIX", tunneld.DefaultWireguardNetworkPrefix.String(), "The CIDR of the wireguard network. All client IPs will be generated within this network. Must be a IPv6 CIDR and have at least 64 bits available.")
-
-	pflag.Parse()
-	if showHelp {
-		pflag.Usage()
-		os.Exit(1)
+	cli.VersionFlag = &cli.BoolFlag{
+		Name:    "version",
+		Aliases: []string{"V"},
+		Usage:   "Print the version.",
 	}
+
+	app := &cli.App{
+		Name:    "tunneld",
+		Usage:   "run a wgtunnel server",
+		Version: buildinfo.Version(),
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "verbose",
+				Aliases: []string{"v"},
+				Usage:   "Enable verbose logging.",
+				EnvVars: []string{"TUNNELD_VERBOSE"},
+			},
+			&cli.StringFlag{
+				Name:    "listen-address",
+				Aliases: []string{"a"},
+				Usage:   "HTTP listen address for the API and tunnel traffic.",
+				Value:   "127.0.0.1:8080",
+				EnvVars: []string{"TUNNELD_LISTEN_ADDRESS"},
+			},
+			&cli.StringFlag{
+				Name:    "base-url",
+				Aliases: []string{"u"},
+				Usage:   "The base URL to use for the tunnel, including scheme. All tunnels will be subdomains of this hostname.",
+				EnvVars: []string{"TUNNELD_BASE_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-endpoint",
+				Aliases: []string{"wg-endpoint"},
+				Usage:   "The UDP address advertised to clients that they will connect to for wireguard connections. It should be in the form host:port.",
+				EnvVars: []string{"TUNNELD_WIREGUARD_ENDPOINT"},
+			},
+			// Technically a uint16.
+			&cli.UintFlag{
+				Name:    "wireguard-port",
+				Aliases: []string{"wg-port"},
+				Usage:   "The UDP port that the wireguard server will listen on. It should be the same as the port in wireguard-endpoint.",
+				EnvVars: []string{"TUNNELD_WIREGUARD_PORT"},
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-key",
+				Aliases: []string{"wg-key"},
+				Usage:   "The private key for the wireguard server. It should be base64 encoded.",
+				EnvVars: []string{"TUNNELD_WIREGUARD_KEY"},
+			},
+			&cli.IntFlag{
+				Name:    "wireguard-mtu",
+				Aliases: []string{"wg-mtu"},
+				Usage:   "The MTU to use for the wireguard interface.",
+				Value:   tunneld.DefaultWireguardMTU,
+				EnvVars: []string{"TUNNELD_WIREGUARD_MTU"},
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-server-ip",
+				Aliases: []string{"wg-server-ip"},
+				Usage:   "The virtual IP address of this server in the wireguard network. Must be an IPv6 address contained within wireguard-network-prefix.",
+				Value:   tunneld.DefaultWireguardServerIP.String(),
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-network-prefix",
+				Aliases: []string{"wg-network-prefix"},
+				Usage:   "The CIDR of the wireguard network. All client IPs will be generated within this network. Must be a IPv6 CIDR and have at least 64 bits available.",
+				Value:   tunneld.DefaultWireguardNetworkPrefix.String(),
+			},
+		},
+		Action: runApp,
+	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runApp(ctx *cli.Context) error {
+	var (
+		verbose                = ctx.Bool("verbose")
+		listenAddress          = ctx.String("listen-address")
+		baseURL                = ctx.String("base-url")
+		wireguardEndpoint      = ctx.String("wireguard-endpoint")
+		wireguardPort          = ctx.Uint("wireguard-port")
+		wireguardKey           = ctx.String("wireguard-key")
+		wireguardMTU           = ctx.Int("wireguard-mtu")
+		wireguardServerIP      = ctx.String("wireguard-server-ip")
+		wireguardNetworkPrefix = ctx.String("wireguard-network-prefix")
+	)
 	if baseURL == "" {
-		log.Println("base-hostname or TUNNELD_BASE_HOSTNAME is required.")
-		showHelp = true
+		return xerrors.New("base-hostname is required. See --help for more information.")
 	}
 	if wireguardEndpoint == "" {
-		log.Println("wireguard-endpoint or TUNNELD_WIREGUARD_ENDPOINT is required.")
-		showHelp = true
+		return xerrors.New("wireguard-endpoint is required. See --help for more information.")
 	}
-	if wireguardPort == 0 {
-		log.Println("wireguard-port or TUNNELD_WIREGUARD_PORT is required.")
-		showHelp = true
+	if wireguardPort < 1 || wireguardPort > 65535 {
+		return xerrors.New("wireguard-port is required and must be between 1 and 65535. See --help for more information.")
 	}
 	if wireguardKey == "" {
-		log.Println("wireguard-key or TUNNELD_WIREGUARD_KEY is required.")
-		showHelp = true
+		return xerrors.New("wireguard-key is required. See --help for more information.")
 	}
-	if showHelp {
-		pflag.Usage()
-		os.Exit(1)
+
+	logger := slog.Make(sloghuman.Sink(os.Stderr)).Leveled(slog.LevelInfo)
+	if verbose {
+		logger = logger.Leveled(slog.LevelDebug)
 	}
 
 	baseURLParsed, err := url.Parse(baseURL)
 	if err != nil {
-		log.Fatalf("Invalid base-url or TUNNELD_BASE_URL %q: %+v", baseURL, err)
+		return xerrors.Errorf("could not parse base-url %q: %w", baseURL, err)
 	}
 	wireguardKeyParsed, err := tunnelsdk.ParsePrivateKey(wireguardKey)
 	if err != nil {
-		log.Fatalf("Invalid wireguard-key or TUNNELD_WIREGUARD_KEY %q: %+v", wireguardKey, err)
+		return xerrors.Errorf("could not parse wireguard-key %q: %w", wireguardKey, err)
 	}
 	wireguardServerIPParsed, err := netip.ParseAddr(wireguardServerIP)
 	if err != nil {
-		log.Fatalf("Invalid wireguard-server-ip or TUNNELD_WIREGUARD_SERVER_IP %q: %+v", wireguardServerIP, err)
+		return xerrors.Errorf("could not parse wireguard-server-ip %q: %w", wireguardServerIP, err)
 	}
 	wireguardNetworkPrefixParsed, err := netip.ParsePrefix(wireguardNetworkPrefix)
 	if err != nil {
-		log.Fatalf("Invalid wireguard-network-prefix or TUNNELD_WIREGUARD_NETWORK_PREFIX %q: %+v", wireguardNetworkPrefix, err)
+		return xerrors.Errorf("could not parse wireguard-network-prefix %q: %w", wireguardNetworkPrefix, err)
 	}
 
 	options := &tunneld.Options{
 		BaseURL:                baseURLParsed,
 		WireguardEndpoint:      wireguardEndpoint,
-		WireguardPort:          wireguardPort,
+		WireguardPort:          uint16(wireguardPort),
 		WireguardKey:           wireguardKeyParsed,
 		WireguardMTU:           wireguardMTU,
 		WireguardServerIP:      wireguardServerIPParsed,
@@ -90,19 +155,27 @@ func main() {
 	}
 	td, err := tunneld.New(options)
 	if err != nil {
-		log.Fatalf("Failed to create new tunneld instance: %+v", err)
+		return xerrors.Errorf("create tunneld.API instance: %w", err)
 	}
 
+	// ReadHeaderTimeout is purposefully not enabled. It caused some issues with
+	// websockets over the dev tunnel.
+	// See: https://github.com/coder/coder/pull/3730
+	//nolint:gosec
 	server := &http.Server{
-		Addr:    listenAddress,
-		Handler: td.Router(),
+		// These errors are typically noise like "TLS: EOF". Vault does similar:
+		// https://github.com/hashicorp/vault/blob/e2490059d0711635e529a4efcbaa1b26998d6e1c/command/server.go#L2714
+		ErrorLog: log.New(io.Discard, "", 0),
+		Addr:     listenAddress,
+		Handler:  td.Router(),
 	}
 
-	log.Printf("Listening on %s", listenAddress)
+	logger.Info(ctx.Context, "listening for requests", slog.F("listen_address", listenAddress))
 	err = server.ListenAndServe()
 	if err != nil {
-		log.Fatalf("Error in ListenAndServe: %+v", err)
+		return xerrors.Errorf("error in ListenAndServe: %w", err)
 	}
 
 	// TODO: manual signal handling
+	return nil
 }

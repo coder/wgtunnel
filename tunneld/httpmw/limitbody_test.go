@@ -7,8 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/coder/wgtunnel/tunneld/httpmw"
 	"github.com/stretchr/testify/require"
+
+	"github.com/coder/wgtunnel/tunneld/httpmw"
 )
 
 func TestLimitBody(t *testing.T) {
@@ -61,6 +62,8 @@ func TestLimitBody(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
 			var buf bytes.Buffer
 			buf.Grow(test.Size)
 			for i := 0; i < test.Size; i++ {

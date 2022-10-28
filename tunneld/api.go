@@ -21,9 +21,13 @@ func (api *API) Router() chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(
-		httpmw.LimitBody(1<<20), // 1MB
-		httpmw.RateLimit(10, 10*time.Second),
+		httpmw.LimitBody(50*1<<20), // 50MB
 		api.handleTunnelMW,
+
+		// Post tunnel middleware, this middleware will never execute on
+		// tunneled connections.
+		httpmw.LimitBody(1<<20), // change back to 1MB
+		httpmw.RateLimit(10, 10*time.Second),
 	)
 
 	r.Post("/api/v1/clients", api.postClients)
@@ -45,7 +49,11 @@ func (api *API) postClients(rw http.ResponseWriter, r *http.Request) {
 
 	ip := api.WireguardPublicKeyToIP(req.PublicKey)
 	if api.wgDevice.LookupPeer(req.PublicKey) == nil {
-		err := api.wgDevice.IpcSet(fmt.Sprintf("public_key=%x\nallowed_ip=%s/128", req.PublicKey, ip.String()))
+		err := api.wgDevice.IpcSet(fmt.Sprintf(`public_key=%x
+allowed_ip=%s/128`,
+			req.PublicKey,
+			ip.String(),
+		))
 		if err != nil {
 			httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
 				Message: "Failed to register client.",

@@ -1,6 +1,7 @@
 package tunneld
 
 import (
+	"context"
 	"fmt"
 	"net/netip"
 
@@ -10,7 +11,7 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 )
 
-// TODO: add logging to API and use for the wg device too
+// TODO: add logging to API
 type API struct {
 	*Options
 
@@ -40,9 +41,17 @@ func New(options *Options) (*API, error) {
 	}
 
 	// Create, configure and start the wireguard device.
-	dev := device.NewDevice(tun, conn.NewDefaultBind(), device.NewLogger(device.LogLevelVerbose, ""))
-	err = dev.IpcSet(fmt.Sprintf(`
-private_key=%s
+	deviceLogger := options.Log.Named("wireguard_device")
+	dlog := &device.Logger{
+		Verbosef: func(format string, args ...interface{}) {
+			deviceLogger.Debug(context.Background(), fmt.Sprintf(format, args...))
+		},
+		Errorf: func(format string, args ...interface{}) {
+			deviceLogger.Error(context.Background(), fmt.Sprintf(format, args...))
+		},
+	}
+	dev := device.NewDevice(tun, conn.NewDefaultBind(), dlog)
+	err = dev.IpcSet(fmt.Sprintf(`private_key=%s
 listen_port=%d`,
 		options.WireguardKey.HexString(),
 		options.WireguardPort,

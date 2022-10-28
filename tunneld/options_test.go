@@ -6,11 +6,12 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/coder/wgtunnel/tunneld"
-	"github.com/coder/wgtunnel/tunnelsdk"
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	"github.com/coder/wgtunnel/tunneld"
+	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
 func Test_Option(t *testing.T) {

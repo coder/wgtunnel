@@ -9,12 +9,13 @@ import (
 	"net/url"
 	"time"
 
-	"cdr.dev/slog"
 	"golang.org/x/xerrors"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	"cdr.dev/slog"
 )
 
 // TunnelPort is the port in the virtual wireguard network stack that the
@@ -77,7 +78,7 @@ func (k Key) HexString() string {
 	return hex.EncodeToString(k.k[:])
 }
 
-// NoisePrivateKey returns teh device.NoisePrivateKey for the key. If the key is
+// NoisePrivateKey returns the device.NoisePrivateKey for the key. If the key is
 // not a private key, an error is returned.
 func (k Key) NoisePrivateKey() (device.NoisePrivateKey, error) {
 	if !k.isPrivate {
@@ -119,7 +120,7 @@ type TunnelConfig struct {
 }
 
 func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, error) {
-	pubKey := device.NoisePublicKey(cfg.PrivateKey.NoisePublicKey())
+	pubKey := cfg.PrivateKey.NoisePublicKey()
 
 	res, err := c.ClientRegister(ctx, ClientRegisterRequest{
 		PublicKey: pubKey,
@@ -188,12 +189,13 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 	}
 
 	// Create wireguard device, configure it and start it.
+	deviceLogger := cfg.Log.Named("wireguard_device")
 	dlog := &device.Logger{
 		Verbosef: func(format string, args ...any) {
-			cfg.Log.Debug(ctx, fmt.Sprintf(format, args...))
+			deviceLogger.Debug(ctx, fmt.Sprintf(format, args...))
 		},
 		Errorf: func(format string, args ...any) {
-			cfg.Log.Error(ctx, fmt.Sprintf(format, args...))
+			deviceLogger.Error(ctx, fmt.Sprintf(format, args...))
 		},
 	}
 	dev := device.NewDevice(tun, conn.NewDefaultBind(), dlog)
