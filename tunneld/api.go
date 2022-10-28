@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/coder/wgtunnel/tunneld/httpapi"
 	"github.com/coder/wgtunnel/tunneld/httpmw"
@@ -103,6 +105,9 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 			return
 		}
 
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(attribute.Bool("proxy_request", true))
+
 		rp := httputil.ReverseProxy{
 			Director: func(rp *http.Request) {
 				rp.URL.Scheme = "http"
@@ -116,22 +121,16 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 						return nil, err
 					}
 
-					/*
-						TODO: add tracing back
-						if traceNetconn {
-							return &netconnWrapper{
-								Conn: nc,
-								span: span,
-								ctx:  ctx,
-							}, nil
-						}
-					*/
-
-					return nc, nil
+					return &tracingConnWrapper{
+						Conn: nc,
+						span: span,
+						ctx:  ctx,
+					}, nil
 				},
 			},
 		}
 
+		span.End()
 		rp.ServeHTTP(rw, r)
 	})
 }

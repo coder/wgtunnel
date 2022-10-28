@@ -60,14 +60,11 @@ func TestEndToEnd(t *testing.T) {
 	})
 
 	// Start a basic HTTP server with the listener.
-	// ReadHeaderTimeout is purposefully not enabled. It caused some issues with
-	// websockets over the dev tunnel.
-	// See: https://github.com/coder/coder/pull/3730
-	//nolint:gosec
 	srv := &http.Server{
 		// These errors are typically noise like "TLS: EOF". Vault does similar:
 		// https://github.com/hashicorp/vault/blob/e2490059d0711635e529a4efcbaa1b26998d6e1c/command/server.go#L2714
-		ErrorLog: log.New(io.Discard, "", 0),
+		ErrorLog:          log.New(io.Discard, "", 0),
+		ReadHeaderTimeout: 5 * time.Second,
 		Handler: http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			rw.Header().Set("Content-Type", "text/plain")
 			rw.WriteHeader(http.StatusOK)

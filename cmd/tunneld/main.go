@@ -1,14 +1,21 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"net/netip"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/urfave/cli/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"golang.org/x/xerrors"
 
 	"cdr.dev/slog"
@@ -80,12 +87,25 @@ func main() {
 				Aliases: []string{"wg-server-ip"},
 				Usage:   "The virtual IP address of this server in the wireguard network. Must be an IPv6 address contained within wireguard-network-prefix.",
 				Value:   tunneld.DefaultWireguardServerIP.String(),
+				EnvVars: []string{"TUNNELD_WIREGUARD_SERVER_IP"},
 			},
 			&cli.StringFlag{
 				Name:    "wireguard-network-prefix",
 				Aliases: []string{"wg-network-prefix"},
 				Usage:   "The CIDR of the wireguard network. All client IPs will be generated within this network. Must be a IPv6 CIDR and have at least 64 bits available.",
 				Value:   tunneld.DefaultWireguardNetworkPrefix.String(),
+				EnvVars: []string{"TUNNELD_WIREGUARD_NETWORK_PREFIX"},
+			},
+			&cli.StringFlag{
+				Name:    "pprof-listen-address",
+				Usage:   "The address to listen on for pprof. If set to an empty string, pprof will not be enabled.",
+				Value:   "127.0.0.1:6060",
+				EnvVars: []string{"TUNNELD_PPROF_LISTEN_ADDRESS"},
+			},
+			&cli.StringFlag{
+				Name:    "tracing-honeycomb-team",
+				Usage:   "The Honeycomb team ID to send tracing data to. If not specified, tracing will not be shipped anywhere.",
+				EnvVars: []string{"TUNNELD_TRACING_HONEYCOMB_TEAM"},
 			},
 		},
 		Action: runApp,
@@ -108,6 +128,8 @@ func runApp(ctx *cli.Context) error {
 		wireguardMTU           = ctx.Int("wireguard-mtu")
 		wireguardServerIP      = ctx.String("wireguard-server-ip")
 		wireguardNetworkPrefix = ctx.String("wireguard-network-prefix")
+		pprofListenAddress     = ctx.String("pprof-listen-address")
+		tracingHoneycombTeam   = ctx.String("tracing-honeycomb-team")
 	)
 	if baseURL == "" {
 		return xerrors.New("base-hostname is required. See --help for more information.")
@@ -125,6 +147,33 @@ func runApp(ctx *cli.Context) error {
 	logger := slog.Make(sloghuman.Sink(os.Stderr)).Leveled(slog.LevelInfo)
 	if verbose {
 		logger = logger.Leveled(slog.LevelDebug)
+	}
+
+	// Initiate tracing.
+	var tp *sdktrace.TracerProvider
+	if tracingHoneycombTeam != "" {
+		exp, err := newHoneycombExporter(ctx.Context, tracingHoneycombTeam)
+		if err != nil {
+			return xerrors.Errorf("failed to create honeycomb telemetry exporter: %w", err)
+		}
+
+		// Create a new tracer provider with a batch span processor and the otlp
+		// exporter.
+		tp := newTraceProvider(exp)
+		otel.SetTracerProvider(tp)
+		otel.SetTextMapPropagator(
+			propagation.NewCompositeTextMapPropagator(
+				propagation.TraceContext{},
+				propagation.Baggage{},
+			),
+		)
+
+		defer func() {
+			// allow time for traces to flush even if command context is canceled
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = tp.Shutdown(ctx)
+		}()
 	}
 
 	baseURLParsed, err := url.Parse(baseURL)
@@ -168,6 +217,26 @@ func runApp(ctx *cli.Context) error {
 		ErrorLog: log.New(io.Discard, "", 0),
 		Addr:     listenAddress,
 		Handler:  td.Router(),
+	}
+	if tp != nil {
+		server.Handler = otelhttp.NewHandler(server.Handler, "tunneld")
+	}
+
+	// Start the pprof server if requested.
+	if pprofListenAddress != "" {
+		var _ = pprof.Handler
+		go func() {
+			server := &http.Server{
+				// See above for why we discard these errors.
+				ErrorLog:          log.New(io.Discard, "", 0),
+				ReadHeaderTimeout: 15 * time.Second,
+				Addr:              pprofListenAddress,
+				Handler:           nil, // use pprof
+			}
+
+			logger.Info(ctx.Context, "starting pprof server", slog.F("listen_address", pprofListenAddress))
+			_ = server.ListenAndServe()
+		}()
 	}
 
 	logger.Info(ctx.Context, "listening for requests", slog.F("listen_address", listenAddress))

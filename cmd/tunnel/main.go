@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -179,6 +180,8 @@ func runApp(ctx *cli.Context) error {
 			}()
 		}
 	}()
+
+	_, _ = fmt.Printf("\nTunnel is ready! You can now connect to %s\n", tunnel.URL.String())
 
 	// TODO: manual signal handling
 	<-tunnel.Wait()
