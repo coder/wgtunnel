@@ -46,4 +46,4 @@ or by running `make build/tunnel`.
 
 ## License
 
-Licensed under the AGPL-3.0 license.
+Licensed under the MIT license.
