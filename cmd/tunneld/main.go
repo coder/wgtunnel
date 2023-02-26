@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
 	"cdr.dev/slog"
@@ -239,12 +241,27 @@ func runApp(ctx *cli.Context) error {
 		}()
 	}
 
-	logger.Info(ctx.Context, "listening for requests", slog.F("listen_address", listenAddress))
-	err = server.ListenAndServe()
-	if err != nil {
-		return xerrors.Errorf("error in ListenAndServe: %w", err)
-	}
+	eg, egCtx := errgroup.WithContext(ctx.Context)
+	eg.Go(func() error {
+		logger.Info(egCtx, "listening for requests", slog.F("listen_address", listenAddress))
+		err = server.ListenAndServe()
+		if err != nil {
+			return xerrors.Errorf("error in ListenAndServe: %w", err)
+		}
+		return nil
+	})
 
-	// TODO: manual signal handling
-	return nil
+	notifyCtx, notifyStop := signal.NotifyContext(ctx.Context, InterruptSignals...)
+	defer notifyStop()
+
+	eg.Go(func() error {
+		<-notifyCtx.Done()
+		logger.Info(egCtx, "shutting down server due to signal")
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(egCtx, 5*time.Second)
+		defer shutdownCancel()
+		return server.Shutdown(shutdownCtx)
+	})
+
+	return eg.Wait()
 }
