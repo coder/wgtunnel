@@ -17,8 +17,12 @@ func Test_postClients(t *testing.T) {
 	key, err := tunnelsdk.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	expectedIP := td.WireguardPublicKeyToIP(key.NoisePublicKey())
-	expectedURL := td.WireguardIPToTunnelURL(expectedIP)
+	expectedIP, expectedURLs := td.WireguardPublicKeyToIPAndURLs(key.NoisePublicKey())
+
+	expectedURLsStr := make([]string, len(expectedURLs))
+	for i, u := range expectedURLs {
+		expectedURLsStr[i] = u.String()
+	}
 
 	// Register a client.
 	res, err := client.ClientRegister(context.Background(), tunnelsdk.ClientRegisterRequest{
@@ -26,7 +30,7 @@ func Test_postClients(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, expectedURL.String(), res.TunnelURL)
+	require.Equal(t, expectedURLsStr, res.TunnelURLs)
 	require.Equal(t, expectedIP, res.ClientIP)
 	require.Equal(t, td.WireguardEndpoint, res.ServerEndpoint)
 	require.Equal(t, td.WireguardServerIP, res.ServerIP)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -218,186 +219,139 @@ func Test_Option(t *testing.T) {
 		})
 	})
 
-	t.Run("WireguardPublicKeyToIP", func(t *testing.T) {
+	t.Run("WireguardPublicKeyToIPAndURLs", func(t *testing.T) {
 		t.Parallel()
 
 		cases := []struct {
 			// base64 encoded
-			key string
-			ip  string
+			key  string
+			ip   string
+			urls []string
 		}{
 			{
 				key: "8HGwtvNSGqXyO2s7UCW/NtvQM7L5jUL+s76h3qZbeG0=",
 				ip:  "f8bf:98cd:3caf:3e62",
+				urls: []string{
+					"http://v2vphj9slsv64.localhost.com",
+					"http://fccaf8bf98cd3caf3e6270a5db3140f9.localhost.com",
+				},
 			},
 			{
 				key: "ikEH8jCTwDMpQb7B1SbLi7itzDHJrlLzZtdNmuiLZHo=",
 				ip:  "2150:c2ea:38fe:21f",
+				urls: []string{
+					"http://458c5qhovo11u.localhost.com",
+					"http://fcca2150c2ea38fe021f76fac00cd533.localhost.com",
+				},
 			},
 			{
 				key: "8yxYMm//sfv27tkSz9itIa/8Ihql+vFRpsvjTSTaYAg=",
 				ip:  "c17e:72e4:c52e:a6c4",
+				urls: []string{
+					"http://o5v75p655qjc8.localhost.com",
+					"http://fccac17e72e4c52ea6c4fbb4ef809339.localhost.com",
+				},
 			},
 			{
 				key: "Gl7xZzfkCyFTbB+Uejc17GmfbjLy6s8NEZBaJKx/swU=",
 				ip:  "f773:2e08:771d:7a6f",
+				urls: []string{
+					"http://utpis23n3lt6u.localhost.com",
+					"http://fccaf7732e08771d7a6f6fdcb4a1f367.localhost.com",
+				},
 			},
 			{
 				key: "f8YjkcGgOggYzlIr2KtShY+8ZgR0hIXmJHPjCG8wi2Q=",
 				ip:  "dcf1:4e76:15bd:b2c7",
+				urls: []string{
+					"http://rjokstglnmpce.localhost.com",
+					"http://fccadcf14e7615bdb2c7638238302374.localhost.com",
+				},
 			},
 			{
 				key: "Q3dubFlwwLnCpQTagjCckb1XLGtViZoBX1qHAZWV2gI=",
 				ip:  "25a2:8a43:2e91:1543",
+				urls: []string{
+					"http://4mh8kgpei4ak6.localhost.com",
+					"http://fcca25a28a432e9115439264ae85af84.localhost.com",
+				},
 			},
 		}
 
 		for i, c := range cases {
-			c := c
+			i, c := i, c
 
-			t.Run(fmt.Sprint(i), func(t *testing.T) {
+			pubKey, err := wgtypes.ParseKey(c.key)
+			require.NoError(t, err)
+
+			t.Run(fmt.Sprintf("Default/%d", i), func(t *testing.T) {
 				t.Parallel()
 
-				pubKey, err := wgtypes.ParseKey(c.key)
+				options := &tunneld.Options{
+					BaseURL: &url.URL{
+						Scheme: "http",
+						Host:   "localhost.com",
+					},
+					WireguardEndpoint:      "localhost:1234",
+					WireguardPort:          1234,
+					WireguardKey:           key,
+					WireguardServerIP:      tunneld.DefaultWireguardServerIP,
+					WireguardNetworkPrefix: tunneld.DefaultWireguardNetworkPrefix,
+				}
+				err := options.Validate()
 				require.NoError(t, err)
 
-				t.Run("Default", func(t *testing.T) {
-					t.Parallel()
+				expectedIP := "fcca::" + c.ip
 
-					options := &tunneld.Options{
-						BaseURL: &url.URL{
-							Scheme: "http",
-							Host:   "localhost",
-						},
-						WireguardEndpoint:      "localhost:1234",
-						WireguardPort:          1234,
-						WireguardKey:           key,
-						WireguardServerIP:      tunneld.DefaultWireguardServerIP,
-						WireguardNetworkPrefix: tunneld.DefaultWireguardNetworkPrefix,
-					}
-					err := options.Validate()
-					require.NoError(t, err)
+				ip, urls := options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey))
+				require.Equal(t, expectedIP, ip.String())
 
-					expectedIP := "fcca::" + c.ip
-
-					ip := options.WireguardPublicKeyToIP(device.NoisePublicKey(pubKey))
-					require.Equal(t, expectedIP, ip.String())
-				})
-
-				t.Run("LongerPrefix", func(t *testing.T) {
-					t.Parallel()
-
-					options := &tunneld.Options{
-						BaseURL: &url.URL{
-							Scheme: "http",
-							Host:   "localhost",
-						},
-						WireguardEndpoint:      "localhost:1234",
-						WireguardPort:          1234,
-						WireguardKey:           key,
-						WireguardServerIP:      netip.MustParseAddr("feed:beef:deaf:deed::1"),
-						WireguardNetworkPrefix: netip.MustParsePrefix("feed:beef:deaf:deed::1/64"),
-					}
-					err := options.Validate()
-					require.NoError(t, err)
-
-					expectedIP := "feed:beef:deaf:deed:" + c.ip
-
-					ip := options.WireguardPublicKeyToIP(device.NoisePublicKey(pubKey))
-					require.Equal(t, expectedIP, ip.String())
-				})
+				urlsStr := make([]string, len(urls))
+				for i, u := range urls {
+					urlsStr[i] = u.String()
+				}
+				require.Equal(t, c.urls, urlsStr)
 			})
-		}
-	})
 
-	t.Run("WireguardIPToTunnelURL", func(t *testing.T) {
-		t.Parallel()
-
-		cases := []struct {
-			ip  string
-			url string
-		}{
-			{
-				ip:  "f8bf:98cd:3caf:3e62",
-				url: "http://v2vphj9slsv64.localhost.com",
-			},
-			{
-				ip:  "2150:c2ea:38fe:21f",
-				url: "http://458c5qhovo11u.localhost.com",
-			},
-			{
-				ip:  "c17e:72e4:c52e:a6c4",
-				url: "http://o5v75p655qjc8.localhost.com",
-			},
-			{
-				ip:  "f773:2e08:771d:7a6f",
-				url: "http://utpis23n3lt6u.localhost.com",
-			},
-			{
-				ip:  "dcf1:4e76:15bd:b2c7",
-				url: "http://rjokstglnmpce.localhost.com",
-			},
-			{
-				ip:  "25a2:8a43:2e91:1543",
-				url: "http://4mh8kgpei4ak6.localhost.com",
-			},
-		}
-
-		for i, c := range cases {
-			c := c
-
-			t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Run(fmt.Sprintf("LongerPrefix/%d", i), func(t *testing.T) {
 				t.Parallel()
 
-				t.Run("Default", func(t *testing.T) {
-					t.Parallel()
+				options := &tunneld.Options{
+					BaseURL: &url.URL{
+						Scheme: "http",
+						Host:   "localhost.com",
+					},
+					WireguardEndpoint:      "localhost:1234",
+					WireguardPort:          1234,
+					WireguardKey:           key,
+					WireguardServerIP:      netip.MustParseAddr("feed:beef:deaf:deed::1"),
+					WireguardNetworkPrefix: netip.MustParsePrefix("feed:beef:deaf:deed::1/64"),
+				}
+				err := options.Validate()
+				require.NoError(t, err)
 
-					options := &tunneld.Options{
-						BaseURL: &url.URL{
-							Scheme: "http",
-							Host:   "localhost.com",
-						},
-						WireguardEndpoint:      "localhost:1234",
-						WireguardPort:          1234,
-						WireguardKey:           key,
-						WireguardServerIP:      tunneld.DefaultWireguardServerIP,
-						WireguardNetworkPrefix: tunneld.DefaultWireguardNetworkPrefix,
-					}
-					err := options.Validate()
-					require.NoError(t, err)
+				expectedIP := "feed:beef:deaf:deed:" + c.ip
 
-					ip, err := netip.ParseAddr("fcca::" + c.ip)
-					require.NoError(t, err)
+				// The second URL has a different IP prefix length, so adjust
+				// accordingly.
+				expectedURL2, err := url.Parse(c.urls[1])
+				require.NoError(t, err)
+				hostRest := strings.SplitN(expectedURL2.Host, ".", 2)[1]
+				expectedURL2.Host = "feedbeefdeafdeed" + expectedURL2.Host[4:20] + "." + hostRest
+				t.Logf("mutated URL %q to %q", c.urls[1], expectedURL2.String())
+				expectedURLs := []string{
+					c.urls[0],
+					expectedURL2.String(),
+				}
 
-					u := options.WireguardIPToTunnelURL(ip)
-					require.Equal(t, c.url, u.String())
-				})
+				ip, urls := options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey))
+				require.Equal(t, expectedIP, ip.String())
 
-				t.Run("LongerPrefix", func(t *testing.T) {
-					t.Parallel()
-
-					options := &tunneld.Options{
-						BaseURL: &url.URL{
-							Scheme: "https",
-							Host:   "localhost.com",
-						},
-						WireguardEndpoint:      "localhost:1234",
-						WireguardPort:          1234,
-						WireguardKey:           key,
-						WireguardServerIP:      netip.MustParseAddr("feed:beef:deaf:deed::1"),
-						WireguardNetworkPrefix: netip.MustParsePrefix("feed:beef:deaf:deed::1/64"),
-					}
-					err := options.Validate()
-					require.NoError(t, err)
-
-					ip, err := netip.ParseAddr("feed:beef:deaf:deed:" + c.ip)
-					require.NoError(t, err)
-
-					u := options.WireguardIPToTunnelURL(ip)
-					require.Equal(t, "https", u.Scheme)
-					u.Scheme = "http"
-					require.Equal(t, c.url, u.String())
-				})
+				urlsStr := make([]string, len(urls))
+				for i, u := range urls {
+					urlsStr[i] = u.String()
+				}
+				require.Equal(t, expectedURLs, urlsStr)
 			})
 		}
 	})
@@ -410,6 +364,7 @@ func Test_Option(t *testing.T) {
 			ip          string
 			errContains string
 		}{
+			// Good format:
 			{
 				hostname: "v2vphj9slsv64",
 				ip:       "f8bf:98cd:3caf:3e62",
@@ -435,13 +390,46 @@ func Test_Option(t *testing.T) {
 				ip:       "25a2:8a43:2e91:1543",
 			},
 
+			// Good format errors:
 			{
 				hostname:    "v2vphj9slsv64.localhost.com",
-				errContains: "decode hostname",
+				errContains: "decode new hostname",
 			},
 			{
 				hostname:    "4mh8kgpei4ak64mh8kgpei4ak6",
-				errContains: "invalid hostname length",
+				errContains: "invalid new hostname length",
+			},
+
+			// Bad format:
+			{
+				hostname: "fccaf8bf98cd3caf3e6270a5db3140f9",
+				ip:       "f8bf:98cd:3caf:3e62",
+			},
+			{
+				hostname: "fcca2150c2ea38fe021f76fac00cd533",
+				ip:       "2150:c2ea:38fe:21f",
+			},
+			{
+				hostname: "fccac17e72e4c52ea6c4fbb4ef809339",
+				ip:       "c17e:72e4:c52e:a6c4",
+			},
+			{
+				hostname: "fccaf7732e08771d7a6f6fdcb4a1f367",
+				ip:       "f773:2e08:771d:7a6f",
+			},
+			{
+				hostname: "fccadcf14e7615bdb2c7638238302374",
+				ip:       "dcf1:4e76:15bd:b2c7",
+			},
+			{
+				hostname: "fcca25a28a432e9115439264ae85af84",
+				ip:       "25a2:8a43:2e91:1543",
+			},
+
+			// Bad format errors:
+			{
+				hostname:    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+				errContains: "decode old hostname",
 			},
 		}
 
@@ -496,7 +484,15 @@ func Test_Option(t *testing.T) {
 					err := options.Validate()
 					require.NoError(t, err)
 
-					ip, err := options.HostnameToWireguardIP(c.hostname)
+					// The second hostname has a different IP prefix length, so
+					// adjust accordingly.
+					hostname := c.hostname
+					if len(hostname) == 32 {
+						hostname = "feedbeefdeafdeed" + hostname[4:20]
+						t.Logf("mutated hostname %q to %q", c.hostname, hostname)
+					}
+
+					ip, err := options.HostnameToWireguardIP(hostname)
 					if c.errContains != "" {
 						require.Error(t, err)
 						require.ErrorContains(t, err, c.errContains)

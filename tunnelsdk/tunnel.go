@@ -132,10 +132,21 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 	if err != nil {
 		return nil, xerrors.Errorf("initial client registration: %w", err)
 	}
+	if len(res.TunnelURLs) == 0 {
+		return nil, xerrors.Errorf("no tunnel urls returned from server")
+	}
 
-	tunnelURL, err := url.Parse(res.TunnelURL)
+	primaryURL, err := url.Parse(res.TunnelURLs[0])
 	if err != nil {
 		return nil, xerrors.Errorf("parse tunnel url: %w", err)
+	}
+
+	otherURLs := make([]*url.URL, len(res.TunnelURLs)-1)
+	for i, u := range res.TunnelURLs[1:] {
+		otherURLs[i], err = url.Parse(u)
+		if err != nil {
+			return nil, xerrors.Errorf("parse tunnel url %d (%q): %w", i, u, err)
+		}
 	}
 
 	// Ensure the returned server endpoint from the API is an IP address and not
@@ -249,18 +260,20 @@ allowed_ip=%s/128`,
 
 	returnedOK = true
 	return &Tunnel{
-		closeFn:  closeFn,
-		closed:   closed,
-		URL:      tunnelURL,
-		Listener: wgListen,
+		closeFn:   closeFn,
+		closed:    closed,
+		URL:       primaryURL,
+		OtherURLs: otherURLs,
+		Listener:  wgListen,
 	}, nil
 }
 
 type Tunnel struct {
-	closeFn  func()
-	closed   <-chan struct{}
-	URL      *url.URL
-	Listener net.Listener
+	closeFn   func()
+	closed    <-chan struct{}
+	URL       *url.URL
+	OtherURLs []*url.URL
+	Listener  net.Listener
 }
 
 func (t *Tunnel) Close() error {

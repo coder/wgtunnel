@@ -49,7 +49,7 @@ func (api *API) postClients(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := api.WireguardPublicKeyToIP(req.PublicKey)
+	ip, urls := api.WireguardPublicKeyToIPAndURLs(req.PublicKey)
 	if api.wgDevice.LookupPeer(req.PublicKey) == nil {
 		err := api.wgDevice.IpcSet(fmt.Sprintf(`public_key=%x
 allowed_ip=%s/128`,
@@ -65,8 +65,13 @@ allowed_ip=%s/128`,
 		}
 	}
 
+	urlsStr := make([]string, len(urls))
+	for i, url := range urls {
+		urlsStr[i] = url.String()
+	}
+
 	httpapi.Write(r.Context(), rw, http.StatusOK, tunnelsdk.ClientRegisterResponse{
-		TunnelURL:       api.WireguardIPToTunnelURL(ip).String(),
+		TunnelURLs:      urlsStr,
 		ClientIP:        ip,
 		ServerEndpoint:  api.WireguardEndpoint,
 		ServerIP:        api.WireguardServerIP,

@@ -19,8 +19,12 @@ type ClientRegisterRequest struct {
 }
 
 type ClientRegisterResponse struct {
-	TunnelURL string     `json:"tunnel_url"`
-	ClientIP  netip.Addr `json:"client_ip"`
+	// TunnelURLs contains a list of valid URLs that will be forwarded from the
+	// server to this tunnel client once connected. The first URL is the
+	// preferred URL, and the other URLs are provided for compatibility
+	// purposes only.
+	TunnelURLs []string   `json:"tunnel_urls"`
+	ClientIP   netip.Addr `json:"client_ip"`
 
 	ServerEndpoint  string                `json:"server_endpoint"`
 	ServerIP        netip.Addr            `json:"server_ip"`
