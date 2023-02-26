@@ -29,7 +29,7 @@ type ClientRegisterResponse struct {
 }
 
 func (c *Client) ClientRegister(ctx context.Context, req ClientRegisterRequest) (ClientRegisterResponse, error) {
-	res, err := c.Request(ctx, http.MethodPost, "/api/v1/clients", req)
+	res, err := c.request(ctx, http.MethodPost, "/api/v1/clients", req)
 	if err != nil {
 		return ClientRegisterResponse{}, err
 	}

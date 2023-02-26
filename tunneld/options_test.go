@@ -437,7 +437,7 @@ func Test_Option(t *testing.T) {
 
 			{
 				hostname:    "v2vphj9slsv64.localhost.com",
-				errContains: "failed to decode hostname",
+				errContains: "decode hostname",
 			},
 			{
 				hostname:    "4mh8kgpei4ak64mh8kgpei4ak6",

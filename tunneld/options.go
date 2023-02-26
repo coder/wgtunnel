@@ -144,7 +144,7 @@ func (options *Options) WireguardIPToTunnelURL(addr netip.Addr) *url.URL {
 func (options *Options) HostnameToWireguardIP(hostname string) (netip.Addr, error) {
 	decoded, err := hostnameEncoder.DecodeString(strings.ToUpper(hostname))
 	if err != nil {
-		return netip.Addr{}, xerrors.Errorf("failed to decode hostname %q as base32: %w", hostname, err)
+		return netip.Addr{}, xerrors.Errorf("decode hostname %q as base32: %w", hostname, err)
 	}
 	if len(decoded) != 8 {
 		return netip.Addr{}, xerrors.Errorf("invalid hostname length: got %d, expected 8", len(decoded))

@@ -119,6 +119,10 @@ type TunnelConfig struct {
 	PrivateKey Key
 }
 
+// LaunchTunnel makes a request to the tunneld server to register the client's
+// tunnel using the client's public key, then establishes a wireguard connection
+// to the server and returns a *Tunnel. Connections can be accepted from
+// tunnel.Listener.
 func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, error) {
 	pubKey := cfg.PrivateKey.NoisePublicKey()
 

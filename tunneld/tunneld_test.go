@@ -22,19 +22,6 @@ import (
 	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
-func TestNew(t *testing.T) {
-	t.Parallel()
-
-	td, client := createTestTunneld(t, nil)
-	require.NotNil(t, td)
-	require.NotNil(t, client)
-
-	res, err := client.Request(context.Background(), http.MethodGet, "/", nil)
-	require.NoError(t, err)
-	_ = res.Body.Close()
-	require.Equal(t, http.StatusNotFound, res.StatusCode)
-}
-
 // TestEndToEnd does an end-to-end tunnel test by creating a tunneld server, a
 // client, setting up the tunnel, and then doing a bunch of tests through the
 // tunnel to ensure it works.
@@ -54,10 +41,10 @@ func TestEndToEnd(t *testing.T) {
 		PrivateKey: key,
 	})
 	require.NoError(t, err, "launch tunnel")
-	t.Cleanup(func() {
+	defer func() {
 		_ = tunnel.Close()
 		<-tunnel.Wait()
-	})
+	}()
 
 	// Start a basic HTTP server with the listener.
 	srv := &http.Server{
@@ -74,9 +61,9 @@ func TestEndToEnd(t *testing.T) {
 	go func() {
 		_ = srv.Serve(tunnel.Listener)
 	}()
-	t.Cleanup(func() {
+	defer func() {
 		_ = srv.Close()
-	})
+	}()
 
 	// Because the DNS isn't setup we have to use a custom HTTP client that uses
 	// the tunnel's dialer.
