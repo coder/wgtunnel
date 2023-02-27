@@ -20,10 +20,13 @@ type ClientRegisterRequest struct {
 }
 
 type ClientRegisterResponse struct {
+	Version TunnelVersion `json:"version"`
 	// TunnelURLs contains a list of valid URLs that will be forwarded from the
 	// server to this tunnel client once connected. The first URL is the
 	// preferred URL, and the other URLs are provided for compatibility
 	// purposes only.
+	//
+	// The order of the URLs changes based on the Version field in the request.
 	TunnelURLs []string   `json:"tunnel_urls"`
 	ClientIP   netip.Addr `json:"client_ip"`
 

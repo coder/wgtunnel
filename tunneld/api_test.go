@@ -30,6 +30,7 @@ func Test_postClients(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	require.Equal(t, tunnelsdk.TunnelVersion2, res.Version)
 	require.Equal(t, expectedURLsStr, res.TunnelURLs)
 	require.Equal(t, expectedIP, res.ClientIP)
 	require.Equal(t, td.WireguardEndpoint, res.ServerEndpoint)
@@ -53,6 +54,8 @@ func Test_postClients(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be equal after reversing the URL list.
+	require.Equal(t, tunnelsdk.TunnelVersion1, res3.Version)
 	res3.TunnelURLs[0], res3.TunnelURLs[1] = res3.TunnelURLs[1], res3.TunnelURLs[0]
+	res3.Version = tunnelsdk.TunnelVersion2
 	require.Equal(t, res, res3)
 }

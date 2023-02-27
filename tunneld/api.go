@@ -49,7 +49,7 @@ func (api *API) postClients(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Version == 0 {
+	if req.Version <= 0 || req.Version > tunnelsdk.TunnelVersionLatest {
 		req.Version = tunnelsdk.TunnelVersionLatest
 	}
 
@@ -75,6 +75,7 @@ allowed_ip=%s/128`,
 	}
 
 	httpapi.Write(r.Context(), rw, http.StatusOK, tunnelsdk.ClientRegisterResponse{
+		Version:         req.Version,
 		TunnelURLs:      urlsStr,
 		ClientIP:        ip,
 		ServerEndpoint:  api.WireguardEndpoint,
