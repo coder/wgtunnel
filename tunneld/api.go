@@ -2,17 +2,21 @@ package tunneld
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/xerrors"
+	"golang.zx2c4.com/wireguard/device"
 
 	"github.com/coder/wgtunnel/tunneld/httpapi"
 	"github.com/coder/wgtunnel/tunneld/httpmw"
@@ -32,6 +36,7 @@ func (api *API) Router() chi.Router {
 		httpmw.RateLimit(10, 10*time.Second),
 	)
 
+	r.Post("/tun", api.postTun)
 	r.Post("/api/v1/clients", api.postClients)
 
 	r.NotFound(func(rw http.ResponseWriter, r *http.Request) {
@@ -43,38 +48,115 @@ func (api *API) Router() chi.Router {
 	return r
 }
 
+type LegacyPostTunRequest struct {
+	PublicKey device.NoisePublicKey `json:"public_key"`
+}
+
+type LegacyPostTunResponse struct {
+	Hostname        string     `json:"hostname"`
+	ServerEndpoint  string     `json:"server_endpoint"`
+	ServerIP        netip.Addr `json:"server_ip"`
+	ServerPublicKey string     `json:"server_public_key"` // hex
+	ClientIP        netip.Addr `json:"client_ip"`
+}
+
+// postTun provides compatibility with the old tunnel client contained in older
+// versions of coder/coder. It essentially converts the old request format to a
+// newer request, and the newer response to the old response format.
+func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
+	var req LegacyPostTunRequest
+	if !httpapi.Read(r.Context(), rw, r, &req) {
+		return
+	}
+
+	registerReq := tunnelsdk.ClientRegisterRequest{
+		Version:   tunnelsdk.TunnelVersion1,
+		PublicKey: req.PublicKey,
+	}
+
+	resp, exists, err := api.registerClient(registerReq)
+	if err != nil {
+		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+			Message: "Failed to register client.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	if len(resp.TunnelURLs) == 0 {
+		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+			Message: "No tunnel URLs found.",
+		})
+		return
+	}
+
+	u, err := url.Parse(resp.TunnelURLs[0])
+	if err != nil {
+		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+			Message: "Failed to parse tunnel URL.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	status := http.StatusCreated
+	if exists {
+		status = http.StatusOK
+	}
+	httpapi.Write(r.Context(), rw, status, LegacyPostTunResponse{
+		Hostname:        u.Host,
+		ServerEndpoint:  resp.ServerEndpoint,
+		ServerIP:        resp.ServerIP,
+		ServerPublicKey: hex.EncodeToString(resp.ServerPublicKey[:]),
+		ClientIP:        resp.ClientIP,
+	})
+}
+
 func (api *API) postClients(rw http.ResponseWriter, r *http.Request) {
 	var req tunnelsdk.ClientRegisterRequest
 	if !httpapi.Read(r.Context(), rw, r, &req) {
 		return
 	}
 
+	resp, _, err := api.registerClient(req)
+	if err != nil {
+		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+			Message: "Failed to register client.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	httpapi.Write(r.Context(), rw, http.StatusOK, resp)
+}
+
+func (api *API) registerClient(req tunnelsdk.ClientRegisterRequest) (tunnelsdk.ClientRegisterResponse, bool, error) {
 	if req.Version <= 0 || req.Version > tunnelsdk.TunnelVersionLatest {
 		req.Version = tunnelsdk.TunnelVersionLatest
 	}
 
 	ip, urls := api.WireguardPublicKeyToIPAndURLs(req.PublicKey, req.Version)
+
+	exists := false
 	if api.wgDevice.LookupPeer(req.PublicKey) == nil {
+		exists = true
+
 		err := api.wgDevice.IpcSet(fmt.Sprintf(`public_key=%x
 allowed_ip=%s/128`,
 			req.PublicKey,
 			ip.String(),
 		))
 		if err != nil {
-			httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
-				Message: "Failed to register client.",
-				Detail:  err.Error(),
-			})
-			return
+			return tunnelsdk.ClientRegisterResponse{}, false, xerrors.Errorf("register client with wireguard: %w", err)
 		}
 	}
 
 	urlsStr := make([]string, len(urls))
-	for i, url := range urls {
-		urlsStr[i] = url.String()
+	for i, u := range urls {
+		urlsStr[i] = u.String()
 	}
 
-	httpapi.Write(r.Context(), rw, http.StatusOK, tunnelsdk.ClientRegisterResponse{
+	return tunnelsdk.ClientRegisterResponse{
 		Version:         req.Version,
 		TunnelURLs:      urlsStr,
 		ClientIP:        ip,
@@ -82,7 +164,7 @@ allowed_ip=%s/128`,
 		ServerIP:        api.WireguardServerIP,
 		ServerPublicKey: api.WireguardKey.NoisePublicKey(),
 		WireguardMTU:    api.WireguardMTU,
-	})
+	}, exists, nil
 }
 
 func (api *API) handleTunnelMW(next http.Handler) http.Handler {
