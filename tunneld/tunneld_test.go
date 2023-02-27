@@ -91,6 +91,10 @@ func TestEndToEnd(t *testing.T) {
 		return err == nil && res.StatusCode == http.StatusOK
 	}, 15*time.Second, 100*time.Millisecond)
 
+	require.NotNil(t, tunnel.URL)
+	require.Len(t, tunnel.OtherURLs, 1)
+	require.NotEqual(t, tunnel.URL.String(), tunnel.OtherURLs[0].String())
+
 	// Make a bunch of requests concurrently.
 	var wg sync.WaitGroup
 	for i := 0; i < 1024; i++ {
@@ -98,7 +102,14 @@ func TestEndToEnd(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			u, err := tunnel.URL.Parse("/test/" + strconv.Itoa(i))
+			// Do half of the requests to the primary URL and the other half to
+			// the other URL (there's only one other URL right now).
+			u := tunnel.URL
+			if i%2 == 0 {
+				u = tunnel.OtherURLs[0]
+			}
+
+			u, err := u.Parse("/test/" + strconv.Itoa(i))
 			assert.NoError(t, err)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

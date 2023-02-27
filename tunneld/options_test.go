@@ -303,12 +303,22 @@ func Test_Option(t *testing.T) {
 
 				expectedIP := "fcca::" + c.ip
 
-				ip, urls := options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey))
+				ip, urls := options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey), tunnelsdk.TunnelVersion2)
 				require.Equal(t, expectedIP, ip.String())
 
 				urlsStr := make([]string, len(urls))
 				for i, u := range urls {
 					urlsStr[i] = u.String()
+				}
+				require.Equal(t, c.urls, urlsStr)
+
+				// Try the old version, which should have a reversed URL list.
+				ip, urls = options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey), tunnelsdk.TunnelVersion1)
+				require.Equal(t, expectedIP, ip.String())
+
+				urlsStr = make([]string, len(urls))
+				for i, u := range urls {
+					urlsStr[len(urls)-i-1] = u.String()
 				}
 				require.Equal(t, c.urls, urlsStr)
 			})
@@ -344,12 +354,22 @@ func Test_Option(t *testing.T) {
 					expectedURL2.String(),
 				}
 
-				ip, urls := options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey))
+				ip, urls := options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey), tunnelsdk.TunnelVersion2)
 				require.Equal(t, expectedIP, ip.String())
 
 				urlsStr := make([]string, len(urls))
 				for i, u := range urls {
 					urlsStr[i] = u.String()
+				}
+				require.Equal(t, expectedURLs, urlsStr)
+
+				// Try the old version, which should have a reversed URL list.
+				ip, urls = options.WireguardPublicKeyToIPAndURLs(device.NoisePublicKey(pubKey), tunnelsdk.TunnelVersion1)
+				require.Equal(t, expectedIP, ip.String())
+
+				urlsStr = make([]string, len(urls))
+				for i, u := range urls {
+					urlsStr[len(urls)-i-1] = u.String()
 				}
 				require.Equal(t, expectedURLs, urlsStr)
 			})

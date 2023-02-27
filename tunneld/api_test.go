@@ -17,7 +17,7 @@ func Test_postClients(t *testing.T) {
 	key, err := tunnelsdk.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	expectedIP, expectedURLs := td.WireguardPublicKeyToIPAndURLs(key.NoisePublicKey())
+	expectedIP, expectedURLs := td.WireguardPublicKeyToIPAndURLs(key.NoisePublicKey(), tunnelsdk.TunnelVersion2)
 
 	expectedURLsStr := make([]string, len(expectedURLs))
 	for i, u := range expectedURLs {
@@ -39,8 +39,20 @@ func Test_postClients(t *testing.T) {
 
 	// Register the same client again.
 	res2, err := client.ClientRegister(context.Background(), tunnelsdk.ClientRegisterRequest{
+		Version:   tunnelsdk.TunnelVersion2,
 		PublicKey: key.NoisePublicKey(),
 	})
 	require.NoError(t, err)
 	require.Equal(t, res, res2)
+
+	// Register the same client with the old version.
+	res3, err := client.ClientRegister(context.Background(), tunnelsdk.ClientRegisterRequest{
+		Version:   tunnelsdk.TunnelVersion1,
+		PublicKey: key.NoisePublicKey(),
+	})
+	require.NoError(t, err)
+
+	// Should be equal after reversing the URL list.
+	res3.TunnelURLs[0], res3.TunnelURLs[1] = res3.TunnelURLs[1], res3.TunnelURLs[0]
+	require.Equal(t, res, res3)
 }

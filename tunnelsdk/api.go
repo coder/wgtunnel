@@ -15,6 +15,7 @@ type Response struct {
 }
 
 type ClientRegisterRequest struct {
+	Version   TunnelVersion         `json:"version"`
 	PublicKey device.NoisePublicKey `json:"public_key"`
 }
 

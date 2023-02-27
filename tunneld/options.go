@@ -127,7 +127,7 @@ func (options *Options) Validate() error {
 //
 //	Take the network prefix, and create a new address filling the last n bytes
 //	with the first n bytes of the hash of the public key. Then convert to hex.
-func (options *Options) WireguardPublicKeyToIPAndURLs(publicKey device.NoisePublicKey) (netip.Addr, []*url.URL) {
+func (options *Options) WireguardPublicKeyToIPAndURLs(publicKey device.NoisePublicKey, version tunnelsdk.TunnelVersion) (netip.Addr, []*url.URL) {
 	var (
 		keyHash   = sha256.Sum256(publicKey[:])
 		addrBytes = options.WireguardNetworkPrefix.Addr().As16()
@@ -154,7 +154,13 @@ func (options *Options) WireguardPublicKeyToIPAndURLs(publicKey device.NoisePubl
 	oldFormatURL := *options.BaseURL
 	oldFormatURL.Host = strings.ToLower(oldFormat) + "." + oldFormatURL.Host
 
-	return netip.AddrFrom16(addrBytes), []*url.URL{&goodFormatURL, &oldFormatURL}
+	urls := []*url.URL{&goodFormatURL, &oldFormatURL}
+	if version == tunnelsdk.TunnelVersion1 {
+		// Return the old format first for backwards compatibility.
+		urls = []*url.URL{&oldFormatURL, &goodFormatURL}
+	}
+
+	return netip.AddrFrom16(addrBytes), urls
 }
 
 // HostnameToWireguardIP returns the wireguard IP address that corresponds to a
