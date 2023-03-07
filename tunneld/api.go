@@ -37,7 +37,7 @@ func (api *API) Router() chi.Router {
 	)
 
 	r.Post("/tun", api.postTun)
-	r.Post("/api/v1/clients", api.postClients)
+	r.Post("/api/v2/clients", api.postClients)
 
 	r.NotFound(func(rw http.ResponseWriter, r *http.Request) {
 		httpapi.Write(r.Context(), rw, http.StatusNotFound, tunnelsdk.Response{
