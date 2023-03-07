@@ -72,6 +72,35 @@ func ParsePrivateKey(key string) (Key, error) {
 	}, nil
 }
 
+// ParsePublicKey parses a public key generated using key.String().
+func ParsePublicKey(key string) (Key, error) {
+	k, err := wgtypes.ParseKey(key)
+	if err != nil {
+		return Key{}, err
+	}
+
+	return Key{
+		k:         k,
+		isPrivate: false,
+	}, nil
+}
+
+// FromNoisePrivateKey converts a device.NoisePrivateKey to a Key.
+func FromNoisePrivateKey(k device.NoisePrivateKey) Key {
+	return Key{
+		k:         wgtypes.Key(k),
+		isPrivate: true,
+	}
+}
+
+// FromNoisePublicKey converts a device.NoisePublicKey to a Key.
+func FromNoisePublicKey(k device.NoisePublicKey) Key {
+	return Key{
+		k:         wgtypes.Key(k),
+		isPrivate: false,
+	}
+}
+
 // IsZero returns true if the Key is the zero value.
 func (k Key) IsZero() bool {
 	return k.k == wgtypes.Key{}
