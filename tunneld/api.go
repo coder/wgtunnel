@@ -64,8 +64,10 @@ type LegacyPostTunResponse struct {
 // versions of coder/coder. It essentially converts the old request format to a
 // newer request, and the newer response to the old response format.
 func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var req LegacyPostTunRequest
-	if !httpapi.Read(r.Context(), rw, r, &req) {
+	if !httpapi.Read(ctx, rw, r, &req) {
 		return
 	}
 
@@ -76,7 +78,7 @@ func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
 
 	resp, exists, err := api.registerClient(registerReq)
 	if err != nil {
-		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, tunnelsdk.Response{
 			Message: "Failed to register client.",
 			Detail:  err.Error(),
 		})
@@ -84,7 +86,7 @@ func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(resp.TunnelURLs) == 0 {
-		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, tunnelsdk.Response{
 			Message: "No tunnel URLs found.",
 		})
 		return
@@ -92,7 +94,7 @@ func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
 
 	u, err := url.Parse(resp.TunnelURLs[0])
 	if err != nil {
-		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, tunnelsdk.Response{
 			Message: "Failed to parse tunnel URL.",
 			Detail:  err.Error(),
 		})
@@ -103,7 +105,7 @@ func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
 	if exists {
 		status = http.StatusOK
 	}
-	httpapi.Write(r.Context(), rw, status, LegacyPostTunResponse{
+	httpapi.Write(ctx, rw, status, LegacyPostTunResponse{
 		Hostname:        u.Host,
 		ServerEndpoint:  resp.ServerEndpoint,
 		ServerIP:        resp.ServerIP,
@@ -113,6 +115,8 @@ func (api *API) postTun(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (api *API) postClients(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var req tunnelsdk.ClientRegisterRequest
 	if !httpapi.Read(r.Context(), rw, r, &req) {
 		return
@@ -120,14 +124,14 @@ func (api *API) postClients(rw http.ResponseWriter, r *http.Request) {
 
 	resp, _, err := api.registerClient(req)
 	if err != nil {
-		httpapi.Write(r.Context(), rw, http.StatusInternalServerError, tunnelsdk.Response{
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, tunnelsdk.Response{
 			Message: "Failed to register client.",
 			Detail:  err.Error(),
 		})
 		return
 	}
 
-	httpapi.Write(r.Context(), rw, http.StatusOK, resp)
+	httpapi.Write(ctx, rw, http.StatusOK, resp)
 }
 
 func (api *API) registerClient(req tunnelsdk.ClientRegisterRequest) (tunnelsdk.ClientRegisterResponse, bool, error) {
@@ -137,9 +141,9 @@ func (api *API) registerClient(req tunnelsdk.ClientRegisterRequest) (tunnelsdk.C
 
 	ip, urls := api.WireguardPublicKeyToIPAndURLs(req.PublicKey, req.Version)
 
-	exists := false
+	exists := true
 	if api.wgDevice.LookupPeer(req.PublicKey) == nil {
-		exists = true
+		exists = false
 
 		err := api.wgDevice.IpcSet(fmt.Sprintf(`public_key=%x
 allowed_ip=%s/128`,

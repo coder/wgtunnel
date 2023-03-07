@@ -72,6 +72,11 @@ func TestEndToEnd(t *testing.T) {
 			u, err := u.Parse("/test/" + strconv.Itoa(i))
 			assert.NoError(t, err)
 
+			// Do a third of the requests with a prefix before the hostname.
+			if i%3 == 0 {
+				u.Host = "prefix--" + u.Host
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -387,11 +392,15 @@ func serveTunnel(t *testing.T, tunnel *tunnelsdk.Tunnel) {
 			_, _ = rw.Write([]byte("hello world " + r.URL.Path))
 		}),
 	}
+
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		_ = srv.Serve(tunnel.Listener)
 	}()
 	t.Cleanup(func() {
 		_ = srv.Close()
+		<-done
 	})
 }
 

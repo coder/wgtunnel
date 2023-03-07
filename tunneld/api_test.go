@@ -29,12 +29,13 @@ func Test_postTun(t *testing.T) {
 	require.Len(t, strings.Split(expectedURLs[0].Host, ".")[0], 32)
 	expectedHostname := expectedURLs[0].Host
 
+	// First request should return a 201.
 	resp, err := client.Request(context.Background(), http.MethodPost, "/tun", tunneld.LegacyPostTunRequest{
 		PublicKey: key.NoisePublicKey(),
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var legacyRes tunneld.LegacyPostTunResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&legacyRes))
@@ -54,6 +55,18 @@ func Test_postTun(t *testing.T) {
 	require.Equal(t, legacyRes.ServerIP, newRes.ServerIP)
 	require.Equal(t, legacyRes.ServerPublicKey, hex.EncodeToString(newRes.ServerPublicKey[:]))
 	require.Equal(t, legacyRes.ClientIP, newRes.ClientIP)
+
+	// Second request should return a 200.
+	resp, err = client.Request(context.Background(), http.MethodPost, "/tun", tunneld.LegacyPostTunRequest{
+		PublicKey: key.NoisePublicKey(),
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var legacyRes2 tunneld.LegacyPostTunResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&legacyRes2))
+	require.Equal(t, legacyRes, legacyRes2)
 }
 
 func Test_postClients(t *testing.T) {

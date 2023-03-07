@@ -55,7 +55,7 @@ type Options struct {
 	WireguardServerIP netip.Addr
 	// WireguardNetworkPrefix is the CIDR of the wireguard network. All client
 	// IPs will be generated within this network. Must be a IPv6 CIDR and have
-	// at least 64 bits of space available. Defaults to fcca::0/64.
+	// at least 64 bits of space available. Defaults to fcca::/16.
 	WireguardNetworkPrefix netip.Prefix
 }
 
@@ -116,7 +116,9 @@ func (options *Options) Validate() error {
 // We support an older 32 character format ("old format") and a newer 12
 // character format ("good format") which is preferred. The first URL returned
 // should be considered "preferred", and all other URLs are provided for
-// compatibility with older deployments only.
+// compatibility with older deployments only. The "good format" is preferred as
+// it's shorter to avoid issues with hostname length limits when apps prefixes
+// are added to the equation.
 //
 // "good format":
 //
