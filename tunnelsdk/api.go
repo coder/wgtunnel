@@ -15,12 +15,20 @@ type Response struct {
 }
 
 type ClientRegisterRequest struct {
+	Version   TunnelVersion         `json:"version"`
 	PublicKey device.NoisePublicKey `json:"public_key"`
 }
 
 type ClientRegisterResponse struct {
-	TunnelURL string     `json:"tunnel_url"`
-	ClientIP  netip.Addr `json:"client_ip"`
+	Version TunnelVersion `json:"version"`
+	// TunnelURLs contains a list of valid URLs that will be forwarded from the
+	// server to this tunnel client once connected. The first URL is the
+	// preferred URL, and the other URLs are provided for compatibility
+	// purposes only.
+	//
+	// The order of the URLs changes based on the Version field in the request.
+	TunnelURLs []string   `json:"tunnel_urls"`
+	ClientIP   netip.Addr `json:"client_ip"`
 
 	ServerEndpoint  string                `json:"server_endpoint"`
 	ServerIP        netip.Addr            `json:"server_ip"`
@@ -29,7 +37,7 @@ type ClientRegisterResponse struct {
 }
 
 func (c *Client) ClientRegister(ctx context.Context, req ClientRegisterRequest) (ClientRegisterResponse, error) {
-	res, err := c.request(ctx, http.MethodPost, "/api/v1/clients", req)
+	res, err := c.Request(ctx, http.MethodPost, "/api/v2/clients", req)
 	if err != nil {
 		return ClientRegisterResponse{}, err
 	}

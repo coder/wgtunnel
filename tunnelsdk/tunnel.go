@@ -22,6 +22,20 @@ import (
 // listener is listening on.
 const TunnelPort = 8080
 
+// TunnelVersion is the version of the tunnel URL specification.
+type TunnelVersion int
+
+const (
+	// TunnelVersion1 is the "old style" tunnel URL. Each hostname base is 32
+	// characters long and is base16 (hex) encoded.
+	TunnelVersion1 TunnelVersion = 1
+	// TunnelVersion2 is the "new style" tunnel URL. Each hostname base is ~12
+	// characters long and is base32 encoded.
+	TunnelVersion2 TunnelVersion = 2
+
+	TunnelVersionLatest = TunnelVersion2
+)
+
 // Key is a Wireguard private or public key.
 type Key struct {
 	k         wgtypes.Key
@@ -113,6 +127,9 @@ func (k Key) PublicKey() (Key, error) {
 
 type TunnelConfig struct {
 	Log slog.Logger
+	// Version denotes which version of the tunnel URL specification to use.
+	// Undefined version is treated as the latest version.
+	Version TunnelVersion
 	// PrivateKey is the Wireguard private key. You can use GeneratePrivateKey
 	// to generate a new key. It should be stored in a safe place for future
 	// tunnel sessions, otherwise you will get a new hostname.
@@ -124,18 +141,34 @@ type TunnelConfig struct {
 // to the server and returns a *Tunnel. Connections can be accepted from
 // tunnel.Listener.
 func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, error) {
+	if cfg.Version == 0 {
+		cfg.Version = TunnelVersionLatest
+	}
+
 	pubKey := cfg.PrivateKey.NoisePublicKey()
 
 	res, err := c.ClientRegister(ctx, ClientRegisterRequest{
+		Version:   cfg.Version,
 		PublicKey: pubKey,
 	})
 	if err != nil {
 		return nil, xerrors.Errorf("initial client registration: %w", err)
 	}
+	if len(res.TunnelURLs) == 0 {
+		return nil, xerrors.Errorf("no tunnel urls returned from server")
+	}
 
-	tunnelURL, err := url.Parse(res.TunnelURL)
+	primaryURL, err := url.Parse(res.TunnelURLs[0])
 	if err != nil {
 		return nil, xerrors.Errorf("parse tunnel url: %w", err)
+	}
+
+	otherURLs := make([]*url.URL, len(res.TunnelURLs)-1)
+	for i, u := range res.TunnelURLs[1:] {
+		otherURLs[i], err = url.Parse(u)
+		if err != nil {
+			return nil, xerrors.Errorf("parse tunnel url %d (%q): %w", i, u, err)
+		}
 	}
 
 	// Ensure the returned server endpoint from the API is an IP address and not
@@ -249,18 +282,20 @@ allowed_ip=%s/128`,
 
 	returnedOK = true
 	return &Tunnel{
-		closeFn:  closeFn,
-		closed:   closed,
-		URL:      tunnelURL,
-		Listener: wgListen,
+		closeFn:   closeFn,
+		closed:    closed,
+		URL:       primaryURL,
+		OtherURLs: otherURLs,
+		Listener:  wgListen,
 	}, nil
 }
 
 type Tunnel struct {
-	closeFn  func()
-	closed   <-chan struct{}
-	URL      *url.URL
-	Listener net.Listener
+	closeFn   func()
+	closed    <-chan struct{}
+	URL       *url.URL
+	OtherURLs []*url.URL
+	Listener  net.Listener
 }
 
 func (t *Tunnel) Close() error {

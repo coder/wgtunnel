@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -143,6 +144,12 @@ func runApp(ctx *cli.Context) error {
 		}
 	}()
 
+	_, _ = fmt.Fprintln(os.Stderr, "Tunnel is ready. You can now connect to one of the following URLs:")
+	_, _ = fmt.Fprintln(os.Stderr, "  -", tunnel.URL.String())
+	for _, u := range tunnel.OtherURLs {
+		_, _ = fmt.Fprintln(os.Stderr, "  -", u.String())
+	}
+
 	// Start forwarding traffic to/from the tunnel.
 	go func() {
 		for {
@@ -183,7 +190,15 @@ func runApp(ctx *cli.Context) error {
 
 	_, _ = fmt.Printf("\nTunnel is ready! You can now connect to %s\n", tunnel.URL.String())
 
-	// TODO: manual signal handling
-	<-tunnel.Wait()
+	notifyCtx, notifyStop := signal.NotifyContext(ctx.Context, InterruptSignals...)
+	defer notifyStop()
+
+	select {
+	case <-notifyCtx.Done():
+		_, _ = fmt.Printf("\nClosing tunnel due to signal...\n")
+		return tunnel.Close()
+	case <-tunnel.Wait():
+	}
+
 	return nil
 }
