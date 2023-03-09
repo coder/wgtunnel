@@ -87,7 +87,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "build/tunneld"
-          body: "Docker image: `${{ env.docker_image_tag }}`"
+          body: "Docker image: `${{ steps.build.outputs.docker_tag }}`"
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts to actions (if dry-run or snapshot)
