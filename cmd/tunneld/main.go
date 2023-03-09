@@ -74,8 +74,14 @@ func main() {
 			&cli.StringFlag{
 				Name:    "wireguard-key",
 				Aliases: []string{"wg-key"},
-				Usage:   "The private key for the wireguard server. It should be base64 encoded.",
+				Usage:   "The private key for the wireguard server. It should be base64 encoded. You can generate a key with `wg genkey`. Mutually exclusive with wireguard-key-file.",
 				EnvVars: []string{"TUNNELD_WIREGUARD_KEY"},
+			},
+			&cli.StringFlag{
+				Name:    "wireguard-key-file",
+				Aliases: []string{"wg-key-file"},
+				Usage:   "The file path containing the private key for the wireguard server. The contents should be base64 encoded. If the file does not exist, a key will be generated for you and written to the file. Mutually exclusive with wireguard-key.",
+				EnvVars: []string{"TUNNELD_WIREGUARD_KEY_FILE"},
 			},
 			&cli.IntFlag{
 				Name:    "wireguard-mtu",
@@ -127,6 +133,7 @@ func runApp(ctx *cli.Context) error {
 		wireguardEndpoint      = ctx.String("wireguard-endpoint")
 		wireguardPort          = ctx.Uint("wireguard-port")
 		wireguardKey           = ctx.String("wireguard-key")
+		wireguardKeyFile       = ctx.String("wireguard-key-file")
 		wireguardMTU           = ctx.Int("wireguard-mtu")
 		wireguardServerIP      = ctx.String("wireguard-server-ip")
 		wireguardNetworkPrefix = ctx.String("wireguard-network-prefix")
@@ -142,8 +149,11 @@ func runApp(ctx *cli.Context) error {
 	if wireguardPort < 1 || wireguardPort > 65535 {
 		return xerrors.New("wireguard-port is required and must be between 1 and 65535. See --help for more information.")
 	}
-	if wireguardKey == "" {
+	if wireguardKey == "" && wireguardKeyFile == "" {
 		return xerrors.New("wireguard-key is required. See --help for more information.")
+	}
+	if wireguardKey != "" && wireguardKeyFile != "" {
+		return xerrors.New("wireguard-key and wireguard-key-file are mutually exclusive. See --help for more information.")
 	}
 
 	logger := slog.Make(sloghuman.Sink(os.Stderr)).Leveled(slog.LevelInfo)
@@ -182,10 +192,6 @@ func runApp(ctx *cli.Context) error {
 	if err != nil {
 		return xerrors.Errorf("could not parse base-url %q: %w", baseURL, err)
 	}
-	wireguardKeyParsed, err := tunnelsdk.ParsePrivateKey(wireguardKey)
-	if err != nil {
-		return xerrors.Errorf("could not parse wireguard-key %q: %w", wireguardKey, err)
-	}
 	wireguardServerIPParsed, err := netip.ParseAddr(wireguardServerIP)
 	if err != nil {
 		return xerrors.Errorf("could not parse wireguard-server-ip %q: %w", wireguardServerIP, err)
@@ -194,6 +200,37 @@ func runApp(ctx *cli.Context) error {
 	if err != nil {
 		return xerrors.Errorf("could not parse wireguard-network-prefix %q: %w", wireguardNetworkPrefix, err)
 	}
+
+	if wireguardKeyFile != "" {
+		_, err = os.Stat(wireguardKeyFile)
+		if xerrors.Is(err, os.ErrNotExist) {
+			logger.Info(ctx.Context, "generating private key to file", slog.F("path", wireguardKeyFile))
+			key, err := tunnelsdk.GeneratePrivateKey()
+			if err != nil {
+				return xerrors.Errorf("could not generate private key: %w", err)
+			}
+
+			err = os.WriteFile(wireguardKeyFile, []byte(key.String()), 0600)
+			if err != nil {
+				return xerrors.Errorf("could not write base64-encoded private key to %q: %w", wireguardKeyFile, err)
+			}
+		} else if err != nil {
+			return xerrors.Errorf("could not stat wireguard-key-file %q: %w", wireguardKeyFile, err)
+		}
+
+		logger.Info(ctx.Context, "reading private key from file", slog.F("path", wireguardKeyFile))
+		wireguardKeyBytes, err := os.ReadFile(wireguardKeyFile)
+		if err != nil {
+			return xerrors.Errorf("could not read wireguard-key-file %q: %w", wireguardKeyFile, err)
+		}
+		wireguardKey = string(wireguardKeyBytes)
+	}
+
+	wireguardKeyParsed, err := tunnelsdk.ParsePrivateKey(wireguardKey)
+	if err != nil {
+		return xerrors.Errorf("could not parse wireguard-key %q: %w", wireguardKey, err)
+	}
+	logger.Info(ctx.Context, "parsed private key", slog.F("hash", wireguardKeyParsed.Hash()))
 
 	options := &tunneld.Options{
 		BaseURL:                baseURLParsed,

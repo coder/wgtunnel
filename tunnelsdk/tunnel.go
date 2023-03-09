@@ -2,6 +2,7 @@ package tunnelsdk
 
 import (
 	"context"
+	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -119,6 +120,12 @@ func (k Key) String() string {
 // HexString returns the hex string representation of the key.
 func (k Key) HexString() string {
 	return hex.EncodeToString(k.k[:])
+}
+
+// Hash returns the SHA512 hash of the key.
+func (k Key) Hash() string {
+	hash := sha512.Sum512(k.k[:])
+	return hex.EncodeToString(hash[:])
 }
 
 // NoisePrivateKey returns the device.NoisePrivateKey for the key. If the key is
