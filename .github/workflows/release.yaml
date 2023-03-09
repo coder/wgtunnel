@@ -48,7 +48,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: "~1.19"
+          go-version: "~1.20"
 
       - name: Build tunneld and Docker images
         id: build
@@ -59,17 +59,24 @@ jobs:
           make clean
           make -j build/tunneld build/tunneld.tag
 
-          echo "docker_tag=$(cat build/tunneld.tag)" >> $GITHUB_OUTPUT
+          image_tag=$(cat build/tunneld.tag)
+          if [[ "$image_tag" == "" ]]; then
+            echo "No tag found in build/tunneld.tag"
+            exit 1
+          fi
+
+          echo "docker_tag=${image_tag}" >> $GITHUB_OUTPUT
 
       - name: Push Docker image
         if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
         run: |
           set -euxo pipefail
 
-          docker push "${{ steps.build.outputs.docker_tag }}"
+          image_tag="${{ steps.build.outputs.docker_tag }}"
+          docker push "$image_tag"
 
           latest_tag="ghcr.io/coder/wgtunnel/tunneld:latest"
-          docker tag "${{ steps.build.outputs.docker_tag }}" "$latest_tag"
+          docker tag "$image_tag" "$latest_tag"
           docker push "$latest_tag"
 
       - name: ls build

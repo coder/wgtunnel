@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/device"
@@ -38,6 +39,7 @@ func Test_Option(t *testing.T) {
 				WireguardMTU:           tunneld.DefaultWireguardMTU + 1,
 				WireguardServerIP:      netip.MustParseAddr("feed::1"),
 				WireguardNetworkPrefix: netip.MustParsePrefix("feed::1/64"),
+				PeerDialTimeout:        1 * time.Second,
 			}
 
 			clone := o

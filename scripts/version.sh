@@ -13,9 +13,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# TODO: remove this after the first tag has been made
-export WGTUNNEL_FORCE_VERSION="0.1.0"
-
 if [[ "${WGTUNNEL_FORCE_VERSION:-}" != "" ]]; then
 	echo "$WGTUNNEL_FORCE_VERSION"
 	exit 0
