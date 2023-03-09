@@ -299,6 +299,58 @@ func TestCompatibility(t *testing.T) {
 	})
 }
 
+func TestTimeout(t *testing.T) {
+	t.Parallel()
+
+	td, client := createTestTunneld(t, &tunneld.Options{
+		BaseURL: &url.URL{
+			Scheme: "http",
+			Host:   "localhost.com",
+		},
+		WireguardEndpoint:      "",              // generated automatically
+		WireguardPort:          0,               // generated automatically
+		WireguardKey:           tunnelsdk.Key{}, // generated automatically
+		WireguardServerIP:      tunneld.DefaultWireguardServerIP,
+		WireguardNetworkPrefix: tunneld.DefaultWireguardNetworkPrefix,
+		PeerDialTimeout:        time.Second,
+	})
+	require.NotNil(t, td)
+
+	// Start a tunnel.
+	key, err := tunnelsdk.GeneratePrivateKey()
+	require.NoError(t, err, "generate private key")
+	tunnel, err := client.LaunchTunnel(context.Background(), tunnelsdk.TunnelConfig{
+		Log: slogtest.
+			Make(t, &slogtest.Options{IgnoreErrors: true}).
+			Named("tunnel_client"),
+		PrivateKey: key,
+	})
+	require.NoError(t, err, "launch tunnel")
+
+	// Close the tunnel.
+	err = tunnel.Close()
+	require.NoError(t, err, "close tunnel")
+	<-tunnel.Wait()
+
+	// Requests should fail in roughly 1 second.
+	c := tunnelHTTPClient(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	u := *tunnel.URL
+	u.Path = "/test/1"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	require.NoError(t, err)
+
+	now := time.Now()
+	res, err := c.Do(req)
+	require.NoError(t, err)
+	require.WithinDuration(t, now.Add(time.Second), time.Now(), 2*time.Second)
+	defer res.Body.Close()
+	require.Equal(t, http.StatusBadGateway, res.StatusCode)
+}
+
 func freeUDPPort(t *testing.T) uint16 {
 	t.Helper()
 

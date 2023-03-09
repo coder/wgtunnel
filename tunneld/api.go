@@ -201,12 +201,12 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 			return
 		}
 
-		dialCtx, dialCancel := context.WithTimeout(ctx, 10*time.Second)
+		dialCtx, dialCancel := context.WithTimeout(ctx, api.Options.PeerDialTimeout)
 		defer dialCancel()
 
 		nc, err := api.wgNet.DialContextTCPAddrPort(dialCtx, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
 		if err != nil {
-			httpapi.Write(ctx, rw, http.StatusBadRequest, tunnelsdk.Response{
+			httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
 				Message: "Failed to dial peer.",
 				Detail:  err.Error(),
 			})

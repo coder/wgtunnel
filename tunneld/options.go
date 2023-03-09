@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"time"
 
 	"golang.org/x/xerrors"
 	"golang.zx2c4.com/wireguard/device"
@@ -17,7 +18,8 @@ import (
 )
 
 const (
-	DefaultWireguardMTU = 1280
+	DefaultWireguardMTU    = 1280
+	DefaultPeerDialTimeout = 10 * time.Second
 )
 
 var (
@@ -57,6 +59,10 @@ type Options struct {
 	// IPs will be generated within this network. Must be a IPv6 CIDR and have
 	// at least 64 bits of space available. Defaults to fcca::/16.
 	WireguardNetworkPrefix netip.Prefix
+
+	// PeerDialTimeout is the timeout for dialing a peer on a request. Defaults
+	// to 10 seconds.
+	PeerDialTimeout time.Duration
 }
 
 // Validate checks that the options are valid and populates default values for
@@ -105,6 +111,10 @@ func (options *Options) Validate() error {
 	}
 	if !options.WireguardNetworkPrefix.Contains(options.WireguardServerIP) {
 		return xerrors.New("WireguardServerIP must be contained within WireguardNetworkPrefix")
+	}
+
+	if options.PeerDialTimeout <= 0 {
+		options.PeerDialTimeout = DefaultPeerDialTimeout
 	}
 
 	return nil
