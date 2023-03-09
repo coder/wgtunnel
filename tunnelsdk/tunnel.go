@@ -21,7 +21,7 @@ import (
 
 // TunnelPort is the port in the virtual wireguard network stack that the
 // listener is listening on.
-const TunnelPort = 8080
+const TunnelPort = 8090
 
 // TunnelVersion is the version of the tunnel URL specification.
 type TunnelVersion int
