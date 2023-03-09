@@ -201,6 +201,18 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 			return
 		}
 
+		dialCtx, dialCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer dialCancel()
+
+		nc, err := api.wgNet.DialContextTCPAddrPort(dialCtx, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
+		if err != nil {
+			httpapi.Write(ctx, rw, http.StatusBadRequest, tunnelsdk.Response{
+				Message: "Failed to dial peer.",
+				Detail:  err.Error(),
+			})
+			return
+		}
+
 		span := trace.SpanFromContext(ctx)
 		span.SetAttributes(attribute.Bool("proxy_request", true))
 
@@ -212,11 +224,6 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 			},
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					nc, err := api.wgNet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
-					if err != nil {
-						return nil, err
-					}
-
 					return &tracingConnWrapper{
 						Conn: nc,
 						span: span,
