@@ -37,7 +37,7 @@ build: build/tunneld build/tunnel
 # architecture. You can change the architecture by setting GOOS and GOARCH
 # manually before calling this target.
 build/tunneld build/tunnel: build/%: $(shell find . -type f -name '*.go')
-	go build \
+	CGO_ENABLED=0 go build \
 		-o "$@" \
 		-tags urfave_cli_no_docs \
 		-ldflags "-s -w -X 'github.com/coder/wgtunnel/buildinfo.tag=$(VERSION)'" \
