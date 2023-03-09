@@ -141,7 +141,7 @@ func runApp(ctx *cli.Context) error {
 		tracingHoneycombTeam   = ctx.String("tracing-honeycomb-team")
 	)
 	if baseURL == "" {
-		return xerrors.New("base-hostname is required. See --help for more information.")
+		return xerrors.New("base-url is required. See --help for more information.")
 	}
 	if wireguardEndpoint == "" {
 		return xerrors.New("wireguard-endpoint is required. See --help for more information.")
