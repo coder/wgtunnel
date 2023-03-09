@@ -45,7 +45,9 @@ build/tunneld build/tunnel: build/%: $(shell find . -type f -name '*.go')
 
 # build/tunneld.tag generates the Docker image for tunneld.
 build/tunneld.tag: build/tunneld
-	tag="ghcr.io/coder/wgtunnel/tunneld:$(VERSION)"
+	# Dev versions contain plus signs which are illegal in Docker tags.
+	version="$(VERSION)"
+	tag="ghcr.io/coder/wgtunnel/tunneld:$${version//+/-}"
 
 	# make a temp directory, copy the binary into it, and build the image.
 	temp_dir=$$(mktemp -d)
