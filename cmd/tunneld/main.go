@@ -105,6 +105,12 @@ func main() {
 				EnvVars: []string{"TUNNELD_WIREGUARD_NETWORK_PREFIX"},
 			},
 			&cli.StringFlag{
+				Name:    "real-ip-header",
+				Usage:   "Use the given header as the real IP address rather than the remote socket address.",
+				Value:   "",
+				EnvVars: []string{"TUNNELD_REAL_IP_HEADER"},
+			},
+			&cli.StringFlag{
 				Name:    "pprof-listen-address",
 				Usage:   "The address to listen on for pprof. If set to an empty string, pprof will not be enabled.",
 				Value:   "127.0.0.1:6060",
@@ -137,6 +143,7 @@ func runApp(ctx *cli.Context) error {
 		wireguardMTU           = ctx.Int("wireguard-mtu")
 		wireguardServerIP      = ctx.String("wireguard-server-ip")
 		wireguardNetworkPrefix = ctx.String("wireguard-network-prefix")
+		realIPHeader           = ctx.String("real-ip-header")
 		pprofListenAddress     = ctx.String("pprof-listen-address")
 		tracingHoneycombTeam   = ctx.String("tracing-honeycomb-team")
 	)
@@ -240,6 +247,7 @@ func runApp(ctx *cli.Context) error {
 		WireguardMTU:           wireguardMTU,
 		WireguardServerIP:      wireguardServerIPParsed,
 		WireguardNetworkPrefix: wireguardNetworkPrefixParsed,
+		RealIPHeader:           realIPHeader,
 	}
 	td, err := tunneld.New(options)
 	if err != nil {

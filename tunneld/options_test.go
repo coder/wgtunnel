@@ -39,6 +39,7 @@ func Test_Option(t *testing.T) {
 				WireguardMTU:           tunneld.DefaultWireguardMTU + 1,
 				WireguardServerIP:      netip.MustParseAddr("feed::1"),
 				WireguardNetworkPrefix: netip.MustParsePrefix("feed::1/64"),
+				RealIPHeader:           "X-Real-Ip",
 				PeerDialTimeout:        1 * time.Second,
 			}
 
@@ -66,6 +67,7 @@ func Test_Option(t *testing.T) {
 				WireguardEndpoint: "localhost:1234",
 				WireguardPort:     1234,
 				WireguardKey:      key,
+				RealIPHeader:      "x-real-ip",
 			}
 
 			err := o.Validate()
@@ -78,6 +80,8 @@ func Test_Option(t *testing.T) {
 			require.EqualValues(t, tunneld.DefaultWireguardMTU, o.WireguardMTU)
 			require.Equal(t, tunneld.DefaultWireguardServerIP, o.WireguardServerIP)
 			require.Equal(t, tunneld.DefaultWireguardNetworkPrefix, o.WireguardNetworkPrefix)
+			// should be canonicalized.
+			require.Equal(t, "X-Real-Ip", o.RealIPHeader)
 		})
 
 		t.Run("Invalid", func(t *testing.T) {
