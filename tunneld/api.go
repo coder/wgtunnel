@@ -43,7 +43,7 @@ func (api *API) Router() chi.Router {
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("https://coder.com"))
+		_, _ = w.Write([]byte("https://coder.com"))
 	})
 	r.Post("/tun", api.postTun)
 	r.Post("/api/v2/clients", api.postClients)
