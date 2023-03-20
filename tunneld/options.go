@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -60,6 +61,12 @@ type Options struct {
 	// at least 64 bits of space available. Defaults to fcca::/16.
 	WireguardNetworkPrefix netip.Prefix
 
+	// RealIPHeader is the header to use for getting a request's IP address. If
+	// not set, the request's RemoteAddr will be used.
+	//
+	// Used for rate limiting.
+	RealIPHeader string
+
 	// PeerDialTimeout is the timeout for dialing a peer on a request. Defaults
 	// to 10 seconds.
 	PeerDialTimeout time.Duration
@@ -111,6 +118,10 @@ func (options *Options) Validate() error {
 	}
 	if !options.WireguardNetworkPrefix.Contains(options.WireguardServerIP) {
 		return xerrors.New("WireguardServerIP must be contained within WireguardNetworkPrefix")
+	}
+
+	if options.RealIPHeader != "" {
+		options.RealIPHeader = http.CanonicalHeaderKey(options.RealIPHeader)
 	}
 
 	if options.PeerDialTimeout <= 0 {

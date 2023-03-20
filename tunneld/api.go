@@ -33,7 +33,12 @@ func (api *API) Router() chi.Router {
 		// Post tunnel middleware, this middleware will never execute on
 		// tunneled connections.
 		httpmw.LimitBody(1<<20), // change back to 1MB
-		httpmw.RateLimit(10, 10*time.Second),
+		httpmw.RateLimit(httpmw.RateLimitConfig{
+			Log:          api.Log.Named("ratelimier"),
+			Count:        10,
+			Window:       10 * time.Second,
+			RealIPHeader: api.Options.RealIPHeader,
+		}),
 	)
 
 	r.Post("/tun", api.postTun)
