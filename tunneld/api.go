@@ -180,6 +180,8 @@ allowed_ip=%s/128`,
 	}, exists, nil
 }
 
+type ipPortKey struct{}
+
 func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -210,36 +212,26 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 			return
 		}
 
-		dialCtx, dialCancel := context.WithTimeout(ctx, api.Options.PeerDialTimeout)
-		defer dialCancel()
-
-		nc, err := api.wgNet.DialContextTCPAddrPort(dialCtx, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
-		if err != nil {
-			httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
-				Message: "Failed to dial peer.",
-				Detail:  err.Error(),
-			})
-			return
-		}
-
 		span := trace.SpanFromContext(ctx)
 		span.SetAttributes(attribute.Bool("proxy_request", true))
 
+		ctx = context.WithValue(ctx, ipPortKey{}, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
+		r = r.WithContext(ctx)
+
 		rp := httputil.ReverseProxy{
+			// This can only happen when it fails to dial.
+			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+				httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
+					Message: "Failed to dial peer.",
+					Detail:  err.Error(),
+				})
+			},
 			Director: func(rp *http.Request) {
 				rp.URL.Scheme = "http"
 				rp.URL.Host = r.Host
 				rp.Host = r.Host
 			},
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					return &tracingConnWrapper{
-						Conn: nc,
-						span: span,
-						ctx:  ctx,
-					}, nil
-				},
-			},
+			Transport: api.transport,
 		}
 
 		span.End()
