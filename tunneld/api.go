@@ -215,6 +215,8 @@ func (api *API) handleTunnelMW(next http.Handler) http.Handler {
 		span := trace.SpanFromContext(ctx)
 		span.SetAttributes(attribute.Bool("proxy_request", true))
 
+		// The transport on the reverse proxy uses this ctx value to know which
+		// IP to dial. See tunneld.go.
 		ctx = context.WithValue(ctx, ipPortKey{}, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
 		r = r.WithContext(ctx)
 
