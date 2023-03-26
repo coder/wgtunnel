@@ -8,6 +8,9 @@ import (
 	"net/netip"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/xerrors"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -73,21 +76,33 @@ listen_port=%d`,
 		wgNet:    wgNet,
 		wgDevice: dev,
 		transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			DialContext: func(ctx context.Context, network, addr string) (nc net.Conn, err error) {
+				ctx, span := otel.GetTracerProvider().Tracer("").Start(ctx, "(http.Transport).DialContext")
+				defer span.End()
+				defer func() {
+					if err != nil {
+						span.RecordError(err)
+						span.SetStatus(codes.Error, err.Error())
+					}
+				}()
+
 				ip := ctx.Value(ipPortKey{})
 				if ip == nil {
-					return nil, xerrors.New("no ip on context")
+					return nil, err
 				}
 
 				ipp, ok := ip.(netip.AddrPort)
 				if !ok {
-					return nil, xerrors.Errorf("ip is incorrect type, got %T", ipp)
+					err = xerrors.Errorf("ip is incorrect type, got %T", ipp)
+					return nil, err
 				}
+
+				span.SetAttributes(attribute.String("wireguard_addr", ipp.Addr().String()))
 
 				dialCtx, dialCancel := context.WithTimeout(ctx, options.PeerDialTimeout)
 				defer dialCancel()
 
-				nc, err := wgNet.DialContextTCPAddrPort(dialCtx, ipp)
+				nc, err = wgNet.DialContextTCPAddrPort(dialCtx, ipp)
 				if err != nil {
 					return nil, err
 				}
