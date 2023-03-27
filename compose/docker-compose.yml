@@ -35,7 +35,7 @@ services:
       TUNNELD_TRACING_HONEYCOMB_TEAM: "${HONEYCOMB_TEAM}"
       TUNNELD_TRACING_INSTANCE_ID: "local"
     volumes:
-      - ${PWD}/wg.key:/wg.key
+      - ./wg.key:/wg.key
     labels:
       caddy: "local.try.coder.app, *.local.try.coder.app"
       caddy.reverse_proxy: "{{upstreams 8080}}"
