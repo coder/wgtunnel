@@ -15,3 +15,7 @@ up:
 	popd
 	docker compose -p wgtunnel up --build
 .PHONY: up
+
+genkey:
+	install -m 600 <(wg genkey) wg.key
+.PHONY: genkey
