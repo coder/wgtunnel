@@ -33,8 +33,8 @@ func (api *API) Router() http.Handler {
 		unknownRouter = chi.NewRouter()
 	)
 
-	hr.Map(api.BaseURL.Hostname(), apiRouter)
-	hr.Map("*."+api.BaseURL.Hostname(), proxyRouter)
+	hr.Map(api.BaseURL.Host, apiRouter)
+	hr.Map("*."+api.BaseURL.Host, proxyRouter)
 	hr.Map("*", unknownRouter)
 
 	proxyRouter.Use(
