@@ -52,7 +52,8 @@ build/tunneld.tag: build/tunneld
 	docker build \
 		--file Dockerfile \
 		--build-arg "WGTUNNEL_VERSION=$(VERSION)" \
-		--tag "$$tag"
+		--tag "$$tag" \
+		.
 
 	echo "$$tag" > "$@"
 
