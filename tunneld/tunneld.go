@@ -88,6 +88,7 @@ listen_port=%d`,
 
 				ip := ctx.Value(ipPortKey{})
 				if ip == nil {
+					err = xerrors.New("no ip on context")
 					return nil, err
 				}
 
