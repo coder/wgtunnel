@@ -123,9 +123,9 @@ func main() {
 				EnvVars: []string{"TUNNELD_TRACING_HONEYCOMB_TEAM"},
 			},
 			&cli.StringFlag{
-				Name:    "tracing-service-id",
-				Usage:   "The service ID to annotate all traces with that uniquely identifies this deployment.",
-				EnvVars: []string{"TUNNELD_TRACING_SERVICE_ID"},
+				Name:    "tracing-instance-id",
+				Usage:   "The instance ID to annotate all traces with that uniquely identifies this deployment.",
+				EnvVars: []string{"TUNNELD_TRACING_INSTANCE_ID"},
 			},
 		},
 		Action: runApp,
@@ -152,7 +152,7 @@ func runApp(ctx *cli.Context) error {
 		realIPHeader           = ctx.String("real-ip-header")
 		pprofListenAddress     = ctx.String("pprof-listen-address")
 		tracingHoneycombTeam   = ctx.String("tracing-honeycomb-team")
-		tracingServiceID       = ctx.String("tracing-service-id")
+		tracingInstanceID      = ctx.String("tracing-instance-id")
 	)
 	if baseURL == "" {
 		return xerrors.New("base-url is required. See --help for more information.")
@@ -185,7 +185,7 @@ func runApp(ctx *cli.Context) error {
 
 		// Create a new tracer provider with a batch span processor and the otlp
 		// exporter.
-		tp := newTraceProvider(exp, tracingServiceID)
+		tp := newTraceProvider(exp, tracingInstanceID)
 		otel.SetTracerProvider(tp)
 		otel.SetTextMapPropagator(
 			propagation.NewCompositeTextMapPropagator(

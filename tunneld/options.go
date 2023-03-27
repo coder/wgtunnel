@@ -19,8 +19,10 @@ import (
 )
 
 const (
-	DefaultWireguardMTU    = 1280
-	DefaultPeerDialTimeout = 10 * time.Second
+	DefaultWireguardMTU     = 1280
+	DefaultPeerDialTimeout  = 10 * time.Second
+	DefaultPeerPollDuration = 30 * time.Second
+	DefaultPeerTimeout      = 2 * time.Minute
 )
 
 var (
@@ -70,6 +72,12 @@ type Options struct {
 	// PeerDialTimeout is the timeout for dialing a peer on a request. Defaults
 	// to 10 seconds.
 	PeerDialTimeout time.Duration
+
+	// PeerPollDuration is how often the clients should re-register.
+	PeerPollDuration time.Duration
+
+	// PeerTimeout is how long the server will wait before removing the peer.
+	PeerTimeout time.Duration
 }
 
 // Validate checks that the options are valid and populates default values for
@@ -126,6 +134,12 @@ func (options *Options) Validate() error {
 
 	if options.PeerDialTimeout <= 0 {
 		options.PeerDialTimeout = DefaultPeerDialTimeout
+	}
+	if options.PeerPollDuration <= 0 {
+		options.PeerPollDuration = DefaultPeerPollDuration
+	}
+	if options.PeerTimeout <= 0 {
+		options.PeerTimeout = DefaultPeerTimeout
 	}
 
 	return nil

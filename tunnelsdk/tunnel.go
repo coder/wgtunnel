@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -228,7 +229,7 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 		}
 	}()
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(res.PollEvery)
 		defer ticker.Stop()
 
 		for {
@@ -239,12 +240,14 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 			}
 
 			ctx, cancel := context.WithTimeout(tunnelCtx, 10*time.Second)
-			_, err := c.ClientRegister(ctx, ClientRegisterRequest{
+			res, err := c.ClientRegister(ctx, ClientRegisterRequest{
 				PublicKey: pubKey,
 			})
-			if err != nil && !xerrors.Is(err, context.Canceled) {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				cfg.Log.Warn(ctx, "periodically re-register tunnel", slog.Error(err))
 			}
+
+			ticker.Reset(res.PollEvery)
 			cancel()
 		}
 	}()

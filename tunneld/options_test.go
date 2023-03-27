@@ -41,6 +41,8 @@ func Test_Option(t *testing.T) {
 				WireguardNetworkPrefix: netip.MustParsePrefix("feed::1/64"),
 				RealIPHeader:           "X-Real-Ip",
 				PeerDialTimeout:        1 * time.Second,
+				PeerPollDuration:       time.Second,
+				PeerTimeout:            time.Second,
 			}
 
 			clone := o

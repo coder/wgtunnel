@@ -165,9 +165,26 @@ func (api *API) registerClient(req tunnelsdk.ClientRegisterRequest) (tunnelsdk.C
 
 	ip, urls := api.WireguardPublicKeyToIPAndURLs(req.PublicKey, req.Version)
 
+	api.pkeyCacheMu.Lock()
+	api.pkeyCache[ip] = cachedPeer{
+		key:           req.PublicKey,
+		lastHandshake: time.Now(),
+	}
+	api.pkeyCacheMu.Unlock()
+
 	exists := true
 	if api.wgDevice.LookupPeer(req.PublicKey) == nil {
 		exists = false
+
+		api.pkeyCacheMu.Lock()
+		api.pkeyCache[ip] = struct {
+			key           device.NoisePublicKey
+			lastHandshake time.Time
+		}{
+			key:           req.PublicKey,
+			lastHandshake: time.Now(),
+		}
+		api.pkeyCacheMu.Unlock()
 
 		err := api.wgDevice.IpcSet(fmt.Sprintf(`public_key=%x
 allowed_ip=%s/128`,
@@ -186,6 +203,7 @@ allowed_ip=%s/128`,
 
 	return tunnelsdk.ClientRegisterResponse{
 		Version:         req.Version,
+		PollEvery:       api.PeerPollDuration,
 		TunnelURLs:      urlsStr,
 		ClientIP:        ip,
 		ServerEndpoint:  api.WireguardEndpoint,
@@ -197,6 +215,13 @@ allowed_ip=%s/128`,
 
 type ipPortKey struct{}
 
+func peerNotConnected(ctx context.Context, rw http.ResponseWriter, r *http.Request) {
+	httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
+		Message: "Peer is not connected.",
+		Detail:  "",
+	})
+}
+
 func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -204,6 +229,12 @@ func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 	subdomain, _ := splitHostname(host)
 	subdomainParts := strings.Split(subdomain, "-")
 	user := subdomainParts[len(subdomainParts)-1]
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Bool("proxy_request", true),
+		attribute.String("user", user),
+	)
 
 	ip, err := api.HostnameToWireguardIP(user)
 	if err != nil {
@@ -214,11 +245,20 @@ func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	span := trace.SpanFromContext(ctx)
-	span.SetAttributes(
-		attribute.Bool("proxy_request", true),
-		attribute.String("user", user),
-	)
+	api.pkeyCacheMu.RLock()
+	pkey, ok := api.pkeyCache[ip]
+	api.pkeyCacheMu.RUnlock()
+
+	if !ok || time.Since(pkey.lastHandshake) > api.PeerTimeout {
+		peerNotConnected(ctx, rw, r)
+		return
+	}
+
+	peer := api.wgDevice.LookupPeer(pkey.key)
+	if peer == nil {
+		peerNotConnected(ctx, rw, r)
+		return
+	}
 
 	// The transport on the reverse proxy uses this ctx value to know which
 	// IP to dial. See tunneld.go.
