@@ -4,8 +4,10 @@ go 1.20
 
 require (
 	cdr.dev/slog v1.4.1
-	github.com/go-chi/chi v1.5.4
+	github.com/go-chi/chi/v5 v5.0.8
+	github.com/go-chi/hostrouter v0.2.0
 	github.com/go-chi/httprate v0.7.1
+	github.com/riandyrn/otelchi v0.5.1
 	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli/v2 v2.24.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.36.4
@@ -44,6 +46,7 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	go.opentelemetry.io/contrib v1.0.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.1 // indirect
 	go.opentelemetry.io/otel/metric v0.33.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect

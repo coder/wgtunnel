@@ -52,8 +52,7 @@ func TestEndToEnd(t *testing.T) {
 	require.NotEqual(t, tunnel.URL.String(), tunnel.OtherURLs[0].String())
 
 	serveTunnel(t, tunnel)
-	c := tunnelHTTPClient(client)
-	waitForTunnelReady(t, c, tunnel)
+	waitForTunnelReady(t, client, tunnel)
 
 	// Make a bunch of requests concurrently.
 	var wg sync.WaitGroup
@@ -70,7 +69,9 @@ func TestEndToEnd(t *testing.T) {
 			}
 
 			u, err := u.Parse("/test/" + strconv.Itoa(i))
-			assert.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 
 			// Do a third of the requests with a prefix before the hostname.
 			if i%3 == 0 {
@@ -80,10 +81,7 @@ func TestEndToEnd(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-			assert.NoError(t, err)
-
-			res, err := c.Do(req)
+			res, err := client.Request(ctx, http.MethodGet, u.String(), nil)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -181,8 +179,7 @@ func TestCompatibility(t *testing.T) {
 		require.NotNil(t, tunnel)
 
 		serveTunnel(t, tunnel)
-		c := tunnelHTTPClient(client)
-		waitForTunnelReady(t, c, tunnel)
+		waitForTunnelReady(t, client, tunnel)
 
 		// Make a request to the tunnel.
 		{
@@ -193,10 +190,7 @@ func TestCompatibility(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-			assert.NoError(t, err)
-
-			res, err := c.Do(req)
+			res, err := client.Request(ctx, http.MethodGet, u.String(), nil)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -268,8 +262,7 @@ func TestCompatibility(t *testing.T) {
 		require.NotNil(t, tunnel)
 
 		serveTunnel(t, tunnel)
-		c := tunnelHTTPClient(client)
-		waitForTunnelReady(t, c, tunnel)
+		waitForTunnelReady(t, client, tunnel)
 
 		// Make a request to the tunnel.
 		{
@@ -280,10 +273,7 @@ func TestCompatibility(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-			assert.NoError(t, err)
-
-			res, err := c.Do(req)
+			res, err := client.Request(ctx, http.MethodGet, u.String(), nil)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -333,18 +323,14 @@ func TestTimeout(t *testing.T) {
 	<-tunnel.Wait()
 
 	// Requests should fail in roughly 1 second.
-	c := tunnelHTTPClient(client)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	u := *tunnel.URL
 	u.Path = "/test/1"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	require.NoError(t, err)
-
 	now := time.Now()
-	res, err := c.Do(req)
+	res, err := client.Request(ctx, http.MethodGet, u.String(), nil)
 	require.NoError(t, err)
 	require.WithinDuration(t, now.Add(time.Second), time.Now(), 2*time.Second)
 	defer res.Body.Close()
@@ -425,7 +411,8 @@ func createTestTunneldNoDefaults(t *testing.T, options *tunneld.Options) (*tunne
 	u, err := url.Parse(srv.URL)
 	require.NoError(t, err, "parse server URL")
 
-	client := tunnelsdk.New(u)
+	client := tunnelsdk.New(options.BaseURL)
+	client.HTTPClient = tunnelHTTPClient(u)
 	return td, client
 }
 
@@ -459,26 +446,24 @@ func serveTunnel(t *testing.T, tunnel *tunnelsdk.Tunnel) {
 // tunnelHTTPClient returns a HTTP client that disregards DNS and always
 // connects to the tunneld server IP. This is useful for testing connections to
 // generated tunnel URLs with custom hostnames that don't resolve.
-func tunnelHTTPClient(client *tunnelsdk.Client) *http.Client {
+func tunnelHTTPClient(tunURL *url.URL) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, network, client.URL.Host)
+				return (&net.Dialer{}).DialContext(ctx, network, tunURL.Host)
 			},
 		},
 	}
 }
 
-func waitForTunnelReady(t *testing.T, c *http.Client, tunnel *tunnelsdk.Tunnel) {
+func waitForTunnelReady(t *testing.T, client *tunnelsdk.Client, tunnel *tunnelsdk.Tunnel) {
 	require.Eventually(t, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tunnel.URL.String(), nil)
+		res, err := client.Request(ctx, http.MethodGet, tunnel.URL.String(), nil)
 		require.NoError(t, err, "create request")
-
-		res, err := c.Do(req)
 		if err == nil {
 			_ = res.Body.Close()
 		}

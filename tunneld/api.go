@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/hostrouter"
+	"github.com/riandyrn/otelchi"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/xerrors"
@@ -23,16 +25,27 @@ import (
 	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
-func (api *API) Router() chi.Router {
-	r := chi.NewRouter()
+func (api *API) Router() http.Handler {
+	var (
+		hr            = hostrouter.New()
+		apiRouter     = chi.NewRouter()
+		proxyRouter   = chi.NewRouter()
+		unknownRouter = chi.NewRouter()
+	)
 
-	r.Use(
+	hr.Map(api.BaseURL.Host, apiRouter)
+	hr.Map("*."+api.BaseURL.Host, proxyRouter)
+	hr.Map("*", unknownRouter)
+
+	proxyRouter.Use(
+		otelchi.Middleware("proxy"),
 		httpmw.LimitBody(50*1<<20), // 50MB
-		api.handleTunnelMW,
+	)
+	proxyRouter.Mount("/", http.HandlerFunc(api.handleTunnel))
 
-		// Post tunnel middleware, this middleware will never execute on
-		// tunneled connections.
-		httpmw.LimitBody(1<<20), // change back to 1MB
+	apiRouter.Use(
+		otelchi.Middleware("api", otelchi.WithChiRoutes(apiRouter)),
+		httpmw.LimitBody(1<<20), // 1MB
 		httpmw.RateLimit(httpmw.RateLimitConfig{
 			Log:          api.Log.Named("ratelimier"),
 			Count:        10,
@@ -41,20 +54,22 @@ func (api *API) Router() chi.Router {
 		}),
 	)
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	apiRouter.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("https://coder.com"))
 	})
-	r.Post("/tun", api.postTun)
-	r.Post("/api/v2/clients", api.postClients)
+	apiRouter.Post("/tun", api.postTun)
+	apiRouter.Post("/api/v2/clients", api.postClients)
 
-	r.NotFound(func(rw http.ResponseWriter, r *http.Request) {
+	notFound := func(rw http.ResponseWriter, r *http.Request) {
 		httpapi.Write(r.Context(), rw, http.StatusNotFound, tunnelsdk.Response{
 			Message: "Not found.",
 		})
-	})
+	}
+	apiRouter.NotFound(notFound)
+	unknownRouter.NotFound(notFound)
 
-	return r
+	return hr
 }
 
 type LegacyPostTunRequest struct {
@@ -182,63 +197,51 @@ allowed_ip=%s/128`,
 
 type ipPortKey struct{}
 
-func (api *API) handleTunnelMW(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-		// Check if the request looks like a tunnel request.
-		host := r.Host
-		if host == "" {
-			httpapi.Write(ctx, rw, http.StatusBadRequest, tunnelsdk.Response{
-				Message: "Missing Host header.",
-			})
-			return
-		}
+	host := r.Host
+	subdomain, _ := splitHostname(host)
+	subdomainParts := strings.Split(subdomain, "-")
+	user := subdomainParts[len(subdomainParts)-1]
 
-		subdomain, rest := splitHostname(host)
-		if rest != api.BaseURL.Hostname() {
-			// Doesn't look like a tunnel request.
-			next.ServeHTTP(rw, r)
-			return
-		}
+	ip, err := api.HostnameToWireguardIP(user)
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusBadRequest, tunnelsdk.Response{
+			Message: "Invalid tunnel URL.",
+			Detail:  err.Error(),
+		})
+		return
+	}
 
-		subdomainParts := strings.Split(subdomain, "-")
-		ip, err := api.HostnameToWireguardIP(subdomainParts[len(subdomainParts)-1])
-		if err != nil {
-			httpapi.Write(ctx, rw, http.StatusBadRequest, tunnelsdk.Response{
-				Message: "Invalid tunnel URL.",
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Bool("proxy_request", true),
+		attribute.String("user", user),
+	)
+
+	// The transport on the reverse proxy uses this ctx value to know which
+	// IP to dial. See tunneld.go.
+	ctx = context.WithValue(ctx, ipPortKey{}, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
+	r = r.WithContext(ctx)
+
+	rp := httputil.ReverseProxy{
+		// This can only happen when it fails to dial.
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
+				Message: "Failed to dial peer.",
 				Detail:  err.Error(),
 			})
-			return
-		}
+		},
+		Director: func(rp *http.Request) {
+			rp.URL.Scheme = "http"
+			rp.URL.Host = r.Host
+			rp.Host = r.Host
+		},
+		Transport: api.transport,
+	}
 
-		span := trace.SpanFromContext(ctx)
-		span.SetAttributes(attribute.Bool("proxy_request", true))
-
-		// The transport on the reverse proxy uses this ctx value to know which
-		// IP to dial. See tunneld.go.
-		ctx = context.WithValue(ctx, ipPortKey{}, netip.AddrPortFrom(ip, tunnelsdk.TunnelPort))
-		r = r.WithContext(ctx)
-
-		rp := httputil.ReverseProxy{
-			// This can only happen when it fails to dial.
-			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-				httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
-					Message: "Failed to dial peer.",
-					Detail:  err.Error(),
-				})
-			},
-			Director: func(rp *http.Request) {
-				rp.URL.Scheme = "http"
-				rp.URL.Host = r.Host
-				rp.Host = r.Host
-			},
-			Transport: api.transport,
-		}
-
-		span.End()
-		rp.ServeHTTP(rw, r)
-	})
+	rp.ServeHTTP(rw, r)
 }
 
 // splitHostname splits a hostname into the subdomain and the rest of the
