@@ -73,8 +73,8 @@ type Options struct {
 	// to 10 seconds.
 	PeerDialTimeout time.Duration
 
-	// PeerPollDuration is how often the clients should re-register.
-	PeerPollDuration time.Duration
+	// PeerRegisterInterval is how often the clients should re-register.
+	PeerRegisterInterval time.Duration
 
 	// PeerTimeout is how long the server will wait before removing the peer.
 	PeerTimeout time.Duration
@@ -135,11 +135,17 @@ func (options *Options) Validate() error {
 	if options.PeerDialTimeout <= 0 {
 		options.PeerDialTimeout = DefaultPeerDialTimeout
 	}
-	if options.PeerPollDuration <= 0 {
-		options.PeerPollDuration = DefaultPeerPollDuration
+	if options.PeerRegisterInterval <= 0 {
+		options.PeerRegisterInterval = DefaultPeerPollDuration
 	}
 	if options.PeerTimeout <= 0 {
 		options.PeerTimeout = DefaultPeerTimeout
+	}
+	if options.PeerRegisterInterval >= options.PeerTimeout {
+		return xerrors.Errorf("PeerRegisterInterval(%s) must be less than PeerTimeout(%s)",
+			options.PeerRegisterInterval.String(),
+			options.PeerTimeout.String(),
+		)
 	}
 
 	return nil

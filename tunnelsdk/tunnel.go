@@ -229,7 +229,7 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 		}
 	}()
 	go func() {
-		ticker := time.NewTicker(res.PollEvery)
+		ticker := time.NewTicker(res.ReregisterWait)
 		defer ticker.Stop()
 
 		for {
@@ -247,7 +247,7 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 				cfg.Log.Warn(ctx, "periodically re-register tunnel", slog.Error(err))
 			}
 
-			ticker.Reset(res.PollEvery)
+			ticker.Reset(res.ReregisterWait)
 			cancel()
 		}
 	}()

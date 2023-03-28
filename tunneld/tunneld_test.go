@@ -342,8 +342,8 @@ func TestPeerTimeout(t *testing.T) {
 	t.Parallel()
 
 	td, client := createTestTunneld(t, &tunneld.Options{
-		PeerTimeout:      time.Second,
-		PeerPollDuration: 100 * time.Millisecond,
+		PeerTimeout:          time.Second,
+		PeerRegisterInterval: 100 * time.Millisecond,
 	})
 	require.NotNil(t, td)
 
@@ -407,7 +407,8 @@ func TestPeerTimeout(t *testing.T) {
 		defer res.Body.Close()
 
 		tres := tunnelsdk.Response{}
-		json.NewDecoder(res.Body).Decode(&tres)
+		err = json.NewDecoder(res.Body).Decode(&tres)
+		require.NoError(t, err)
 
 		require.Equal(t, http.StatusBadGateway, res.StatusCode)
 		require.Equal(t, "Peer is not connected.", tres.Message)

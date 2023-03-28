@@ -177,10 +177,7 @@ func (api *API) registerClient(req tunnelsdk.ClientRegisterRequest) (tunnelsdk.C
 		exists = false
 
 		api.pkeyCacheMu.Lock()
-		api.pkeyCache[ip] = struct {
-			key           device.NoisePublicKey
-			lastHandshake time.Time
-		}{
+		api.pkeyCache[ip] = cachedPeer{
 			key:           req.PublicKey,
 			lastHandshake: time.Now(),
 		}
@@ -203,7 +200,7 @@ allowed_ip=%s/128`,
 
 	return tunnelsdk.ClientRegisterResponse{
 		Version:         req.Version,
-		PollEvery:       api.PeerPollDuration,
+		ReregisterWait:  api.PeerRegisterInterval,
 		TunnelURLs:      urlsStr,
 		ClientIP:        ip,
 		ServerEndpoint:  api.WireguardEndpoint,
@@ -214,13 +211,6 @@ allowed_ip=%s/128`,
 }
 
 type ipPortKey struct{}
-
-func peerNotConnected(ctx context.Context, rw http.ResponseWriter, r *http.Request) {
-	httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
-		Message: "Peer is not connected.",
-		Detail:  "",
-	})
-}
 
 func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -250,13 +240,10 @@ func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 	api.pkeyCacheMu.RUnlock()
 
 	if !ok || time.Since(pkey.lastHandshake) > api.PeerTimeout {
-		peerNotConnected(ctx, rw, r)
-		return
-	}
-
-	peer := api.wgDevice.LookupPeer(pkey.key)
-	if peer == nil {
-		peerNotConnected(ctx, rw, r)
+		httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
+			Message: "Peer is not connected.",
+			Detail:  "",
+		})
 		return
 	}
 
