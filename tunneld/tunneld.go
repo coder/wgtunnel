@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -24,6 +25,14 @@ type API struct {
 	wgNet     *netstack.Net
 	wgDevice  *device.Device
 	transport *http.Transport
+
+	pkeyCacheMu sync.RWMutex
+	pkeyCache   map[netip.Addr]cachedPeer
+}
+
+type cachedPeer struct {
+	key           device.NoisePublicKey
+	lastHandshake time.Time
 }
 
 func New(options *Options) (*API, error) {
@@ -72,9 +81,10 @@ listen_port=%d`,
 	}
 
 	return &API{
-		Options:  options,
-		wgNet:    wgNet,
-		wgDevice: dev,
+		Options:   options,
+		wgNet:     wgNet,
+		wgDevice:  dev,
+		pkeyCache: make(map[netip.Addr]cachedPeer),
 		transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (nc net.Conn, err error) {
 				ctx, span := otel.GetTracerProvider().Tracer("").Start(ctx, "(http.Transport).DialContext")

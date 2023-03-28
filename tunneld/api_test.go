@@ -100,6 +100,7 @@ func Test_postClients(t *testing.T) {
 	require.Equal(t, td.WireguardServerIP, res.ServerIP)
 	require.Equal(t, td.WireguardKey.NoisePublicKey(), res.ServerPublicKey)
 	require.Equal(t, td.WireguardMTU, res.WireguardMTU)
+	require.Equal(t, td.PeerRegisterInterval, res.ReregisterWait)
 
 	// Register the same client again.
 	res2, err := client.ClientRegister(context.Background(), tunnelsdk.ClientRegisterRequest{

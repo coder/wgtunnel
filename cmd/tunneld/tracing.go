@@ -26,11 +26,11 @@ func newHoneycombExporter(ctx context.Context, teamID string) (*otlptrace.Export
 	return otlptrace.New(ctx, client)
 }
 
-func newTraceProvider(exp *otlptrace.Exporter, serviceID string) *sdktrace.TracerProvider {
+func newTraceProvider(exp *otlptrace.Exporter, instanceID string) *sdktrace.TracerProvider {
 	rsc := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String("WireguardTunnel"),
-		semconv.ServiceInstanceIDKey.String(serviceID),
+		semconv.ServiceInstanceIDKey.String(instanceID),
 		semconv.ServiceVersionKey.String(buildinfo.Version()),
 	)
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/netip"
+	"time"
 
 	"golang.zx2c4.com/wireguard/device"
 )
@@ -20,7 +21,8 @@ type ClientRegisterRequest struct {
 }
 
 type ClientRegisterResponse struct {
-	Version TunnelVersion `json:"version"`
+	Version        TunnelVersion `json:"version"`
+	ReregisterWait time.Duration `json:"reregister_wait"`
 	// TunnelURLs contains a list of valid URLs that will be forwarded from the
 	// server to this tunnel client once connected. The first URL is the
 	// preferred URL, and the other URLs are provided for compatibility

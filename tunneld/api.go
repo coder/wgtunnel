@@ -165,9 +165,23 @@ func (api *API) registerClient(req tunnelsdk.ClientRegisterRequest) (tunnelsdk.C
 
 	ip, urls := api.WireguardPublicKeyToIPAndURLs(req.PublicKey, req.Version)
 
+	api.pkeyCacheMu.Lock()
+	api.pkeyCache[ip] = cachedPeer{
+		key:           req.PublicKey,
+		lastHandshake: time.Now(),
+	}
+	api.pkeyCacheMu.Unlock()
+
 	exists := true
 	if api.wgDevice.LookupPeer(req.PublicKey) == nil {
 		exists = false
+
+		api.pkeyCacheMu.Lock()
+		api.pkeyCache[ip] = cachedPeer{
+			key:           req.PublicKey,
+			lastHandshake: time.Now(),
+		}
+		api.pkeyCacheMu.Unlock()
 
 		err := api.wgDevice.IpcSet(fmt.Sprintf(`public_key=%x
 allowed_ip=%s/128`,
@@ -186,6 +200,7 @@ allowed_ip=%s/128`,
 
 	return tunnelsdk.ClientRegisterResponse{
 		Version:         req.Version,
+		ReregisterWait:  api.PeerRegisterInterval,
 		TunnelURLs:      urlsStr,
 		ClientIP:        ip,
 		ServerEndpoint:  api.WireguardEndpoint,
@@ -205,6 +220,12 @@ func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 	subdomainParts := strings.Split(subdomain, "-")
 	user := subdomainParts[len(subdomainParts)-1]
 
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Bool("proxy_request", true),
+		attribute.String("user", user),
+	)
+
 	ip, err := api.HostnameToWireguardIP(user)
 	if err != nil {
 		httpapi.Write(ctx, rw, http.StatusBadRequest, tunnelsdk.Response{
@@ -214,11 +235,17 @@ func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	span := trace.SpanFromContext(ctx)
-	span.SetAttributes(
-		attribute.Bool("proxy_request", true),
-		attribute.String("user", user),
-	)
+	api.pkeyCacheMu.RLock()
+	pkey, ok := api.pkeyCache[ip]
+	api.pkeyCacheMu.RUnlock()
+
+	if !ok || time.Since(pkey.lastHandshake) > api.PeerTimeout {
+		httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
+			Message: "Peer is not connected.",
+			Detail:  "",
+		})
+		return
+	}
 
 	// The transport on the reverse proxy uses this ctx value to know which
 	// IP to dial. See tunneld.go.

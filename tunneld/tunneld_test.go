@@ -2,6 +2,7 @@ package tunneld_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log"
 	"net"
@@ -335,6 +336,83 @@ func TestTimeout(t *testing.T) {
 	require.WithinDuration(t, now.Add(time.Second), time.Now(), 2*time.Second)
 	defer res.Body.Close()
 	require.Equal(t, http.StatusBadGateway, res.StatusCode)
+}
+
+func TestPeerTimeout(t *testing.T) {
+	t.Parallel()
+
+	td, client := createTestTunneld(t, &tunneld.Options{
+		PeerTimeout:          time.Second,
+		PeerRegisterInterval: 100 * time.Millisecond,
+	})
+	require.NotNil(t, td)
+
+	// Start a tunnel.
+	key, err := tunnelsdk.GeneratePrivateKey()
+	require.NoError(t, err, "generate private key")
+	tunnel, err := client.LaunchTunnel(context.Background(), tunnelsdk.TunnelConfig{
+		Log: slogtest.
+			Make(t, &slogtest.Options{IgnoreErrors: true}).
+			Named("tunnel_client"),
+		PrivateKey: key,
+	})
+	require.NoError(t, err, "launch tunnel")
+	defer func() {
+		_ = tunnel.Close()
+		<-tunnel.Wait()
+	}()
+
+	require.NotNil(t, tunnel.URL)
+	require.Len(t, tunnel.OtherURLs, 1)
+	require.NotEqual(t, tunnel.URL.String(), tunnel.OtherURLs[0].String())
+
+	serveTunnel(t, tunnel)
+	waitForTunnelReady(t, client, tunnel)
+
+	// Successfully send a request to the peer.
+	{
+		u, err := tunnel.URL.Parse("/test/1")
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		res, err := client.Request(ctx, http.MethodGet, u.String(), nil)
+		if !assert.NoError(t, err) {
+			return
+		}
+		defer res.Body.Close()
+		assert.Equal(t, http.StatusOK, res.StatusCode)
+
+		body, err := io.ReadAll(res.Body)
+		require.NoError(t, err)
+		require.Equal(t, "hello world /test/1", string(body))
+	}
+
+	err = tunnel.Close()
+	require.NoError(t, err, "close tunnel")
+	<-tunnel.Wait()
+
+	time.Sleep(td.PeerTimeout)
+
+	// The correct error should be returned after the peer goes away.
+	{
+		u, err := tunnel.URL.Parse("/test/1")
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		res, err := client.Request(ctx, http.MethodGet, u.String(), nil)
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		tres := tunnelsdk.Response{}
+		err = json.NewDecoder(res.Body).Decode(&tres)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadGateway, res.StatusCode)
+		require.Equal(t, "Peer is not connected.", tres.Message)
+	}
 }
 
 func freeUDPPort(t *testing.T) uint16 {

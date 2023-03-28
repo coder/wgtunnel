@@ -211,7 +211,6 @@ linters:
     - asciicheck
     - bidichk
     - bodyclose
-    - deadcode
     - dogsled
     - errcheck
     - errname
@@ -255,4 +254,3 @@ linters:
     - typecheck
     - unconvert
     - unused
-    - varcheck
