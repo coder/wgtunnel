@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -121,6 +122,11 @@ func main() {
 				Usage:   "The Honeycomb team ID to send tracing data to. If not specified, tracing will not be shipped anywhere.",
 				EnvVars: []string{"TUNNELD_TRACING_HONEYCOMB_TEAM"},
 			},
+			&cli.StringFlag{
+				Name:    "tracing-instance-id",
+				Usage:   "The instance ID to annotate all traces with that uniquely identifies this deployment.",
+				EnvVars: []string{"TUNNELD_TRACING_INSTANCE_ID"},
+			},
 		},
 		Action: runApp,
 	}
@@ -146,6 +152,7 @@ func runApp(ctx *cli.Context) error {
 		realIPHeader           = ctx.String("real-ip-header")
 		pprofListenAddress     = ctx.String("pprof-listen-address")
 		tracingHoneycombTeam   = ctx.String("tracing-honeycomb-team")
+		tracingInstanceID      = ctx.String("tracing-instance-id")
 	)
 	if baseURL == "" {
 		return xerrors.New("base-url is required. See --help for more information.")
@@ -173,12 +180,12 @@ func runApp(ctx *cli.Context) error {
 	if tracingHoneycombTeam != "" {
 		exp, err := newHoneycombExporter(ctx.Context, tracingHoneycombTeam)
 		if err != nil {
-			return xerrors.Errorf("failed to create honeycomb telemetry exporter: %w", err)
+			return xerrors.Errorf("create honeycomb telemetry exporter: %w", err)
 		}
 
 		// Create a new tracer provider with a batch span processor and the otlp
 		// exporter.
-		tp := newTraceProvider(exp)
+		tp := newTraceProvider(exp, tracingInstanceID)
 		otel.SetTracerProvider(tp)
 		otel.SetTextMapPropagator(
 			propagation.NewCompositeTextMapPropagator(
@@ -210,7 +217,7 @@ func runApp(ctx *cli.Context) error {
 
 	if wireguardKeyFile != "" {
 		_, err = os.Stat(wireguardKeyFile)
-		if xerrors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) {
 			logger.Info(ctx.Context, "generating private key to file", slog.F("path", wireguardKeyFile))
 			key, err := tunnelsdk.GeneratePrivateKey()
 			if err != nil {

@@ -57,7 +57,31 @@ jobs:
           go mod download
 
           make clean
-          make -j build/tunneld build/tunneld.tag
+          GOOS=darwin GOARCH=arm64 make build
+          mv build/tunneld tunneld-darwin-arm64
+          mv build/tunnel tunnel-darwin-arm64
+          make clean
+          GOOS=darwin GOARCH=amd64 make build
+          mv build/tunneld tunneld-darwin-amd64
+          mv build/tunnel tunnel-darwin-amd64
+          make clean
+          GOOS=linux GOARCH=arm GOARM=7 make build
+          mv build/tunneld tunneld-linux-armv7
+          mv build/tunnel tunnel-linux-armv7
+          make clean
+          GOOS=linux GOARCH=arm64 make build
+          mv build/tunneld tunneld-linux-arm64
+          mv build/tunnel tunnel-linux-arm64
+          make clean
+          GOOS=linux GOARCH=amd64 make build
+          mv build/tunneld tunneld-linux-amd64
+          mv build/tunnel tunnel-linux-amd64
+          make clean
+          GOOS=windows GOARCH=amd64 make build
+          mv build/tunneld tunneld-windows-amd64
+          mv build/tunnel tunnel-linux-amd64
+          make clean
+          make -j tunneld build/tunneld.tag
 
           image_tag=$(cat build/tunneld.tag)
           if [[ "$image_tag" == "" ]]; then
@@ -67,17 +91,17 @@ jobs:
 
           echo "docker_tag=${image_tag}" >> $GITHUB_OUTPUT
 
-      - name: Push Docker image
-        if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
-        run: |
-          set -euxo pipefail
+      # - name: Push Docker image
+      #   if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
+      #   run: |
+      #     set -euxo pipefail
 
-          image_tag="${{ steps.build.outputs.docker_tag }}"
-          docker push "$image_tag"
+      #     image_tag="${{ steps.build.outputs.docker_tag }}"
+      #     docker push "$image_tag"
 
-          latest_tag="ghcr.io/coder/wgtunnel/tunneld:latest"
-          docker tag "$image_tag" "$latest_tag"
-          docker push "$latest_tag"
+      #     latest_tag="ghcr.io/coder/wgtunnel/tunneld:latest"
+      #     docker tag "$image_tag" "$latest_tag"
+      #     docker push "$latest_tag"
 
       - name: ls build
         run: ls -lh build
@@ -86,7 +110,7 @@ jobs:
         if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "build/tunneld"
+          artifacts: "tunnel-*-*"
           body: "Docker image: `${{ steps.build.outputs.docker_tag }}`"
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -96,5 +120,11 @@ jobs:
         with:
           name: release-artifacts
           path: |
-            ./build/tunneld
+            ./tunnel-darwin-amd64
+            ./tunnel-darwin-arm64
+            ./tunnel-linux-arm64
+            ./tunnel-linux-amd64
+            ./tunnel-linux-armv7
+            ./tunnel-windows-arm64
+            ./tunnel-windows-amd64
           retention-days: 7

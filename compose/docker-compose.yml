@@ -1,0 +1,47 @@
+version: "3.9"
+services:
+  caddy:
+    build: ./caddy
+    ports:
+      - 8080:80
+      - 4443:443
+    environment:
+      - CADDY_INGRESS_NETWORKS=caddy
+    networks:
+      - caddy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - caddy_data:/data
+    restart: unless-stopped
+
+  tunnel:
+    build: ..
+    restart: always
+    ports:
+      - 55551:55551/udp
+    networks:
+      - caddy
+    environment:
+      TUNNELD_LISTEN_ADDRESS: "0.0.0.0:8080"
+      TUNNELD_BASE_URL: "https://local.try.coder.app:4443"
+      TUNNELD_WIREGUARD_ENDPOINT: "local.try.coder.app:55551"
+      TUNNELD_WIREGUARD_PORT: "55551"
+      TUNNELD_WIREGUARD_KEY_FILE: "/home/tunneld/wg.key"
+      TUNNELD_WIREGUARD_MTU: "1280"
+      TUNNELD_WIREGUARD_SERVER_IP: "fcca::1"
+      TUNNELD_WIREGUARD_NETWORK_PREFIX: "fcca::/16"
+      TUNNELD_REAL_IP_HEADER: "X-Forwarded-For"
+      TUNNELD_PPROF_LISTEN_ADDRESS: "127.0.0.1:6060"
+      TUNNELD_TRACING_HONEYCOMB_TEAM: "${HONEYCOMB_TEAM}"
+      TUNNELD_TRACING_INSTANCE_ID: "local"
+    labels:
+      caddy: "local.try.coder.app, *.local.try.coder.app"
+      caddy.reverse_proxy: "{{upstreams 8080}}"
+      caddy.tls.dns: cloudflare ${CLOUDFLARE_TOKEN}
+
+networks:
+  caddy:
+    external: true
+
+volumes:
+  caddy_data: {}

@@ -49,17 +49,12 @@ build/tunneld.tag: build/tunneld
 	version="$(VERSION)"
 	tag="ghcr.io/coder/wgtunnel/tunneld:$${version//+/-}"
 
-	# make a temp directory, copy the binary into it, and build the image.
-	temp_dir=$$(mktemp -d)
-	cp build/tunneld "$$temp_dir"
-
 	docker build \
 		--file Dockerfile \
 		--build-arg "WGTUNNEL_VERSION=$(VERSION)" \
 		--tag "$$tag" \
-		"$$temp_dir"
+		.
 
-	rm -rf "$$temp_dir"
 	echo "$$tag" > "$@"
 
 test:

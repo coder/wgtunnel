@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/coder/wgtunnel/tunneld"
@@ -98,6 +100,7 @@ func Test_postClients(t *testing.T) {
 	require.Equal(t, td.WireguardServerIP, res.ServerIP)
 	require.Equal(t, td.WireguardKey.NoisePublicKey(), res.ServerPublicKey)
 	require.Equal(t, td.WireguardMTU, res.WireguardMTU)
+	require.Equal(t, td.PeerRegisterInterval, res.ReregisterWait)
 
 	// Register the same client again.
 	res2, err := client.ClientRegister(context.Background(), tunnelsdk.ClientRegisterRequest{
@@ -119,4 +122,18 @@ func Test_postClients(t *testing.T) {
 	res3.TunnelURLs[0], res3.TunnelURLs[1] = res3.TunnelURLs[1], res3.TunnelURLs[0]
 	res3.Version = tunnelsdk.TunnelVersion2
 	require.Equal(t, res, res3)
+}
+
+func Test_getRoot(t *testing.T) {
+	t.Parallel()
+
+	_, client := createTestTunneld(t, nil)
+
+	res, err := client.Request(context.Background(), http.MethodGet, "/", nil)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	out, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "https://coder.com", string(out))
 }
