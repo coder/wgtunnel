@@ -91,17 +91,17 @@ jobs:
 
           echo "docker_tag=${image_tag}" >> $GITHUB_OUTPUT
 
-      - name: Push Docker image
-        if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
-        run: |
-          set -euxo pipefail
+      # - name: Push Docker image
+      #   if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
+      #   run: |
+      #     set -euxo pipefail
 
-          image_tag="${{ steps.build.outputs.docker_tag }}"
-          docker push "$image_tag"
+      #     image_tag="${{ steps.build.outputs.docker_tag }}"
+      #     docker push "$image_tag"
 
-          latest_tag="ghcr.io/coder/wgtunnel/tunneld:latest"
-          docker tag "$image_tag" "$latest_tag"
-          docker push "$latest_tag"
+      #     latest_tag="ghcr.io/coder/wgtunnel/tunneld:latest"
+      #     docker tag "$image_tag" "$latest_tag"
+      #     docker push "$latest_tag"
 
       - name: ls build
         run: ls -lh build
@@ -110,7 +110,7 @@ jobs:
         if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "build/tunneld"
+          artifacts: "tunnel-*-*"
           body: "Docker image: `${{ steps.build.outputs.docker_tag }}`"
           token: ${{ secrets.GITHUB_TOKEN }}
 
