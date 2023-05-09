@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +19,7 @@ import (
 	"cdr.dev/slog/sloggers/sloghuman"
 	"github.com/coder/wgtunnel/buildinfo"
 	"github.com/coder/wgtunnel/tunnelsdk"
+	"github.com/dchest/uniuri"
 )
 
 func main() {
@@ -43,12 +45,14 @@ func main() {
 				Name:    "api-url",
 				Usage:   "The base URL of the tunnel API.",
 				EnvVars: []string{"TUNNEL_API_URL"},
+				Value:   "https://try.ii.nz",
 			},
 			&cli.StringFlag{
 				Name:    "wireguard-key",
 				Aliases: []string{"wg-key"},
 				Usage:   "The private key for the wireguard client. It should be base64 encoded. You must specify this or wireguard-key-file.",
 				EnvVars: []string{"TUNNEL_WIREGUARD_KEY"},
+				Value:   b64.StdEncoding.EncodeToString([]byte(uniuri.NewLen(32))),
 			},
 			&cli.StringFlag{
 				Name:    "wireguard-key-file",
