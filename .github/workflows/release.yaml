@@ -110,7 +110,7 @@ jobs:
         if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "tunnel-*-*"
+          artifacts: "tunnel*-*-*"
           body: "Docker image: `${{ steps.build.outputs.docker_tag }}`"
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -120,6 +120,13 @@ jobs:
         with:
           name: release-artifacts
           path: |
+            ./tunneld-darwin-amd64
+            ./tunneld-darwin-arm64
+            ./tunneld-linux-arm64
+            ./tunneld-linux-amd64
+            ./tunneld-linux-armv7
+            ./tunneld-windows-arm64
+            ./tunneld-windows-amd64
             ./tunnel-darwin-amd64
             ./tunnel-darwin-arm64
             ./tunnel-linux-arm64
