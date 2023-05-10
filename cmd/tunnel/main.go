@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/dchest/uniuri"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -47,8 +49,9 @@ func main() {
 			&cli.StringFlag{
 				Name:    "wireguard-key",
 				Aliases: []string{"wg-key"},
-				Usage:   "The private key for the wireguard client. It should be base64 encoded. You must specify this or wireguard-key-file.",
+				Usage:   "The private key for the wireguard client. It should be base64 encoded. Defaults to a new random key. wireguard-key-file will over-ride this option.",
 				EnvVars: []string{"TUNNEL_WIREGUARD_KEY"},
+				Value:   b64.StdEncoding.EncodeToString([]byte(uniuri.NewLen(32))),
 			},
 			&cli.StringFlag{
 				Name:    "wireguard-key-file",
@@ -75,12 +78,6 @@ func runApp(ctx *cli.Context) error {
 	)
 	if apiURL == "" {
 		return xerrors.New("api-url is required. See --help for more information.")
-	}
-	if wireguardKey == "" && wireguardKeyFile == "" {
-		return xerrors.New("wireguard-key or wireguard-key-file is required. See --help for more information.")
-	}
-	if wireguardKey != "" && wireguardKeyFile != "" {
-		return xerrors.New("Only one of wireguard-key or wireguard-key-file can be specified. See --help for more information.")
 	}
 
 	if ctx.Args().Len() != 1 {
