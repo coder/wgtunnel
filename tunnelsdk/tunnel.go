@@ -2,10 +2,12 @@ package tunnelsdk
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"net/netip"
 	"net/url"
@@ -194,6 +196,9 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 	if len(res.TunnelURLs) == 0 {
 		return nil, xerrors.Errorf("no tunnel urls returned from server")
 	}
+	if res.ReregisterWait <= 0 {
+		return nil, xerrors.Errorf("invalid reregister wait time: %s", res.ReregisterWait)
+	}
 
 	primaryURL, err := url.Parse(res.TunnelURLs[0])
 	if err != nil {
@@ -245,6 +250,17 @@ func (c *Client) LaunchTunnel(ctx context.Context, cfg TunnelConfig) (*Tunnel, e
 			})
 			if err != nil && !errors.Is(err, context.Canceled) {
 				cfg.Log.Warn(ctx, "periodically re-register tunnel", slog.Error(err))
+			}
+
+			// If we failed to re-register, try again in 30 seconds plus a
+			// random amount of time between 0 and 30 seconds.
+			if res.ReregisterWait <= 0 {
+				res.ReregisterWait = 30 * time.Second
+				i, err := rand.Int(rand.Reader, big.NewInt(30))
+				if err != nil {
+					i = big.NewInt(30)
+				}
+				res.ReregisterWait += time.Duration(i.Int64()) * time.Second
 			}
 
 			ticker.Reset(res.ReregisterWait)
