@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tailscale/wireguard-go/device"
 	"golang.org/x/xerrors"
-	"golang.zx2c4.com/wireguard/device"
 
 	"cdr.dev/slog"
 	"github.com/coder/wgtunnel/tunnelsdk"

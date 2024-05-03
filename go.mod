@@ -2,7 +2,7 @@ module github.com/coder/wgtunnel
 
 go 1.20
 
-replace golang.zx2c4.com/wireguard => github.com/coder/wireguard-go v0.0.0-20230920225835-b7d43c468619
+replace github.com/tailscale/wireguard-go => github.com/coder/wireguard-go v0.0.0-20240502122727-a4cb23ac736d
 
 require (
 	cdr.dev/slog v1.6.2-0.20230901043036-3e17d6de9749
@@ -11,6 +11,7 @@ require (
 	github.com/go-chi/httprate v0.7.4
 	github.com/riandyrn/otelchi v0.5.1
 	github.com/stretchr/testify v1.8.4
+	github.com/tailscale/wireguard-go v0.0.0-20231121184858-cc193a0b3272
 	github.com/urfave/cli/v2 v2.25.7
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.44.0
 	go.opentelemetry.io/otel v1.18.0
@@ -21,7 +22,6 @@ require (
 	golang.org/x/mod v0.12.0
 	golang.org/x/sync v0.3.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
-	golang.zx2c4.com/wireguard v0.0.0-20230704135630-469159ecf7d1
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
 	google.golang.org/grpc v1.58.3
 )
@@ -62,5 +62,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gvisor.dev/gvisor v0.0.0-20221203005347-703fd9b7fbc0 // indirect
+	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259 // indirect
 )

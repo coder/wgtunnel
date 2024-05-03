@@ -15,10 +15,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/hostrouter"
 	"github.com/riandyrn/otelchi"
+	"github.com/tailscale/wireguard-go/device"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/xerrors"
-	"golang.zx2c4.com/wireguard/device"
 
 	"github.com/coder/wgtunnel/tunneld/httpapi"
 	"github.com/coder/wgtunnel/tunneld/httpmw"

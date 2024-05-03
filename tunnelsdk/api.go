@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"time"
 
-	"golang.zx2c4.com/wireguard/device"
+	"github.com/tailscale/wireguard-go/device"
 )
 
 type Response struct {
