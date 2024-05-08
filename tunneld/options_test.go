@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"golang.zx2c4.com/wireguard/device"
+	"github.com/tailscale/wireguard-go/device"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/coder/wgtunnel/tunneld"
