@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/httprate"
 
-	"cdr.dev/slog"
+	"cdr.dev/slog/v3"
 	"github.com/coder/wgtunnel/tunneld/httpapi"
 	"github.com/coder/wgtunnel/tunnelsdk"
 )

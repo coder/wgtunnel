@@ -5,7 +5,7 @@ go 1.20
 replace github.com/tailscale/wireguard-go => github.com/coder/wireguard-go v0.0.0-20240502122727-a4cb23ac736d
 
 require (
-	cdr.dev/slog v1.6.2-0.20230901043036-3e17d6de9749
+	cdr.dev/slog/v3 v3.0.0-rc1
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-chi/hostrouter v0.2.0
 	github.com/go-chi/httprate v0.7.4

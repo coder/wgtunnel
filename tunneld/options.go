@@ -14,7 +14,7 @@ import (
 	"github.com/tailscale/wireguard-go/device"
 	"golang.org/x/xerrors"
 
-	"cdr.dev/slog"
+	"cdr.dev/slog/v3"
 	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
