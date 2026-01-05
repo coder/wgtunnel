@@ -19,7 +19,7 @@ import (
 	"golang.org/x/xerrors"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"cdr.dev/slog"
+	"cdr.dev/slog/v3"
 )
 
 // TunnelPort is the port in the virtual wireguard network stack that the
