@@ -36,7 +36,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version: "~1.22"
+          go-version: "~1.23"
       - name: Check for unstaged files
         run: ./scripts/check_unstaged.sh
 
@@ -50,11 +50,9 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version: "~1.22"
+          go-version: "~1.23"
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
-        with:
-          version: v1.64.8
+        run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run
 
   test:
     runs-on: ubuntu-latest
@@ -66,7 +64,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version: "~1.22"
+          go-version: "~1.23"
       - name: Install gotestsum
         uses: jaxxstorm/action-install-gh-release@6096f2a2bbfee498ced520b6922ac2c06e990ed2 # v2.1.0
         env:
