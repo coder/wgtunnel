@@ -249,7 +249,7 @@ func runApp(ctx *cli.Context) error {
 	options := &tunneld.Options{
 		BaseURL:                baseURLParsed,
 		WireguardEndpoint:      wireguardEndpoint,
-		WireguardPort:          uint16(wireguardPort),
+		WireguardPort:          uint16(wireguardPort), //nolint:gosec // validated earlier
 		WireguardKey:           wireguardKeyParsed,
 		WireguardMTU:           wireguardMTU,
 		WireguardServerIP:      wireguardServerIPParsed,
