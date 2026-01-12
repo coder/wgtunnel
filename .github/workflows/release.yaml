@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # If the event that triggered the build was an annotated tag (which our
       # tags are supposed to be), actions/checkout has a bug where the tag in
@@ -49,6 +50,7 @@ jobs:
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version: "~1.22"
+          cache: false
 
       - name: Build tunneld and Docker images
         id: build
@@ -69,10 +71,12 @@ jobs:
 
       - name: Push Docker image
         if: ${{ !github.event.inputs.dry_run && !github.event.inputs.snapshot }}
+        env:
+          DOCKER_TAG: ${{ steps.build.outputs.docker_tag }}
         run: |
           set -euxo pipefail
 
-          image_tag="${{ steps.build.outputs.docker_tag }}"
+          image_tag="$DOCKER_TAG"
           docker push "$image_tag"
 
           latest_tag="ghcr.io/coder/wgtunnel/tunneld:latest"
