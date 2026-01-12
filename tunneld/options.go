@@ -243,6 +243,6 @@ func (options *Options) HostnameToWireguardIP(hostname string) (netip.Addr, erro
 	}
 
 	addrBytes := options.WireguardNetworkPrefix.Addr().As16()
-	copy(addrBytes[8:], addrLast8Bytes[:])
+	copy(addrBytes[8:], addrLast8Bytes)
 	return netip.AddrFrom16(addrBytes), nil
 }

@@ -54,7 +54,7 @@ func (api *API) Router() http.Handler {
 		}),
 	)
 
-	apiRouter.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	apiRouter.Get("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("https://coder.com"))
 	})
@@ -254,7 +254,7 @@ func (api *API) handleTunnel(rw http.ResponseWriter, r *http.Request) {
 
 	rp := httputil.ReverseProxy{
 		// This can only happen when it fails to dial.
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+		ErrorHandler: func(_ http.ResponseWriter, _ *http.Request, err error) {
 			httpapi.Write(ctx, rw, http.StatusBadGateway, tunnelsdk.Response{
 				Message: "Failed to dial peer.",
 				Detail:  err.Error(),
