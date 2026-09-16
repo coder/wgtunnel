@@ -86,7 +86,7 @@ listen_port=%d`,
 		wgDevice:  dev,
 		pkeyCache: make(map[netip.Addr]cachedPeer),
 		transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (nc net.Conn, err error) {
+			DialContext: func(ctx context.Context, _, _ string) (nc net.Conn, err error) {
 				ctx, span := otel.GetTracerProvider().Tracer("").Start(ctx, "(http.Transport).DialContext")
 				defer span.End()
 				defer func() {
