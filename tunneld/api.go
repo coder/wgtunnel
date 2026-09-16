@@ -50,7 +50,7 @@ func (api *API) Router() http.Handler {
 			Log:          api.Log.Named("ratelimier"),
 			Count:        10,
 			Window:       10 * time.Second,
-			RealIPHeader: api.Options.RealIPHeader,
+			RealIPHeader: api.RealIPHeader,
 		}),
 	)
 

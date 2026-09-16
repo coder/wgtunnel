@@ -145,8 +145,8 @@ func TestCompatibility(t *testing.T) {
 		})
 		require.NotNil(t, td)
 
-		ip1, urls1 := td.Options.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion1)
-		ip2, urls2 := td.Options.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion2)
+		ip1, urls1 := td.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion1)
+		ip2, urls2 := td.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion2)
 
 		// Identical IP address in both formats. This differs from the old
 		// wgtunnel which uses all 16 bytes of the IP instead of just the prefix
@@ -225,8 +225,8 @@ func TestCompatibility(t *testing.T) {
 		})
 		require.NotNil(t, td)
 
-		ip1, urls1 := td.Options.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion1)
-		ip2, urls2 := td.Options.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion2)
+		ip1, urls1 := td.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion1)
+		ip2, urls2 := td.WireguardPublicKeyToIPAndURLs(clientPublicKey.NoisePublicKey(), tunnelsdk.TunnelVersion2)
 
 		// Identical IP address in both formats. This differs from the old
 		// wgtunnel which uses all 16 bytes of the IP instead of just the prefix
@@ -506,7 +506,9 @@ func serveTunnel(t *testing.T, tunnel *tunnelsdk.Tunnel) {
 		Handler: http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			rw.Header().Set("Content-Type", "text/plain")
 			rw.WriteHeader(http.StatusOK)
-			_, _ = rw.Write([]byte("hello world " + r.URL.Path))
+			// The path is attacker-controlled only within this test's own
+			// requests, so echoing it back is safe here.
+			_, _ = rw.Write([]byte("hello world " + r.URL.Path)) //nolint:gosec // test-only echo server
 		}),
 	}
 

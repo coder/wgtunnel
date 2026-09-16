@@ -2,6 +2,7 @@ package httpmw_test
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -71,7 +72,7 @@ func TestLimitBody(t *testing.T) {
 				require.NoError(t, err, "expected to write byte to buffer successfully")
 			}
 
-			req := httptest.NewRequest("POST", "/", &buf)
+			req := httptest.NewRequestWithContext(context.Background(), "POST", "/", &buf)
 			middleware := httpmw.LimitBody(test.Limit)
 
 			handlerCalled := false
